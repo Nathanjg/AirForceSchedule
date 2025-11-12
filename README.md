@@ -73,7 +73,7 @@
     <!-- Firebase Imports -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, deleteDoc, onSnapshot, collection, query, addDoc, setLogLevel, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Configuration ---
@@ -286,6 +286,7 @@
 
             // Save to Firestore. The onSnapshot listener will handle conflict checking and re-rendering.
             try {
+                // The collection path uses the Project ID as the App ID for data separation
                 const collectionPath = `artifacts/${appId}/public/data/flights`;
                 await addDoc(collection(db, collectionPath), newFlightData);
                 
@@ -340,9 +341,8 @@
                 renderSchedule();
             }, (error) => {
                 console.error("Firestore snapshot error:", error);
-                // Only show data retrieval failure if DB was already initialized
                 if (db) {
-                    showMessage(`Data retrieval failed: ${error.message}`, 'error');
+                    showMessage(`Data retrieval failed: ${error.message}. Check your security rules!`, 'error');
                 }
             });
         }
@@ -352,26 +352,32 @@
          * Initializes Firebase and authenticates the user.
          */
         async function initializeFirebase() {
-            appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-
-            if (Object.keys(firebaseConfig).length === 0) {
-                showMessage('Firebase configuration is missing. Cannot save data.', 'error');
-                return;
-            }
-
+            
+            // --- STEP 1: YOUR LIVE FIREBASE CONFIGURATION ---
+            // This object contains the keys you provided.
+            const firebaseConfig = {
+              apiKey: "AIzaSyAXeuJ7JX5Wk-nJJcmuiJUyka7VhFOfFBM",
+              authDomain: "schedulebackend-3f971.firebaseapp.com",
+              projectId: "schedulebackend-3f971",
+              storageBucket: "schedulebackend-3f971.firebasestorage.app",
+              messagingSenderId: "515254394901",
+              appId: "1:515254394901:web:2d1d175efa23b9849a6e1c",
+              measurementId: "G-72W7XFDTZT"
+            };
+            
+            // We use the projectId as the unique application ID for data partitioning in Firestore.
+            appId = firebaseConfig.projectId; 
+            
             try {
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 setLogLevel('debug'); // Enable detailed Firebase logging
 
-                // 1. Authentication
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                // 1. Authentication (Using Anonymous sign-in for simplicity)
+                await signInAnonymously(auth);
+                
+                // Get the User ID after sign-in
                 userId = auth.currentUser?.uid || crypto.randomUUID();
                 userIdDisplay.textContent = `Authenticated User ID: ${userId}`;
                 
@@ -380,7 +386,7 @@
 
             } catch (error) {
                 console.error("Firebase Initialization/Auth failed:", error);
-                showMessage('Initialization failed: Could not connect to the database.', 'error');
+                showMessage('Initialization failed. Check your config and services in the Firebase console.', 'error');
                 userIdDisplay.textContent = `User ID: Error`;
             }
         }
