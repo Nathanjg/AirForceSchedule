@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flight Deconfliction Schedule (Firestore)</title>
+    <title>Calculated Flight Deconfliction Schedule</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Custom styles for a cleaner look */
@@ -20,30 +20,44 @@
 </head>
 <body class="p-4 sm:p-8">
     <div class="max-w-6xl mx-auto bg-white shadow-xl rounded-xl p-6 lg:p-10">
-        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">Airspace Schedule Manager (Live Data)</h1>
-        <p class="text-gray-600 mb-4">Flagging potential conflicts at 8 interception points. Minimum separation time is **5 minutes**.</p>
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">Airspace Schedule Manager (Deconfliction Mode)</h1>
+        <p class="text-gray-600 mb-4">
+            **Rule Check:** Blocks scheduling the same route within 5 minutes of another flight.
+            <br>
+            **Conflict Flag:** Flags intersection conflicts only between flights on **different routes**. Minimum separation is **5 minutes** at any spot.
+        </p>
         <p id="userIdDisplay" class="text-sm text-gray-500 mb-8"></p>
 
         <!-- Flight Input Form -->
         <div class="mb-10 p-6 bg-blue-50 rounded-lg border border-blue-200">
-            <h2 class="text-xl font-semibold text-blue-800 mb-4">Add New Flight</h2>
+            <h2 class="text-xl font-semibold text-blue-800 mb-4">Pilot Input (Auto-Calculation)</h2>
             <form id="addFlightForm" class="space-y-4">
-                <!-- Basic Flight Info -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <input type="text" id="flightId" required placeholder="Flight ID (e.g., UA123)" class="p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
-                    <input type="text" id="origin" required placeholder="Origin" class="p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
-                    <input type="text" id="destination" required placeholder="Destination" class="p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
-                </div>
+                <!-- Core Flight Info -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <input type="text" id="flightId" required placeholder="Callsign (e.g., UA123)" class="p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    
+                    <input type="number" id="speedKnots" required placeholder="Speed (Knots, e.g., 480)" min="1" class="p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
 
-                <!-- Intersection Times (8 Spots) -->
-                <h3 class="text-lg font-medium text-gray-700 mt-6 pt-4 border-t">8 Intersection Timings (Local Date/Time)</h3>
-                <p class="text-sm text-gray-500 mb-2">Use the format `YYYY-MM-DDTHH:MM` (e.g., 2025-12-31T15:30) for each spot.</p>
-                <div id="intersectionInputs" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <!-- Inputs will be generated here by JavaScript -->
+                    <select id="routeSelector" required class="p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
+                        <option value="" disabled selected>Select Route</option>
+                        <option value="VR140">VR140</option>
+                        <option value="VR142">VR142</option>
+                        <option value="VR143">VR143</option>
+                        <option value="IR123">IR123</option>
+                        <option value="SR130">SR130</option>
+                        <option value="SR286">SR286</option>
+                        <option value="SR287">SR287</option>
+                        <option value="SR290">SR290</option>
+                        <option value="SR292">SR292</option>
+                    </select>
+
+                    <input type="datetime-local" id="startTime" required 
+                           placeholder="Start Day/Time" 
+                           class="p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
                 </div>
                 
                 <button type="submit" id="submitButton" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-150 shadow-md">
-                    Add Flight & Check Deconfliction
+                    Calculate & Schedule Flight
                 </button>
             </form>
         </div>
@@ -55,9 +69,9 @@
                 <thead class="sticky top-0 bg-gray-100 z-10">
                     <tr>
                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Flight ID</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Route</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Route & Speed</th>
                         <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Conflict Spot(s)</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Intersects At Spot(s)</th>
                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                 </thead>
@@ -73,14 +87,28 @@
     <!-- Firebase Imports -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, deleteDoc, onSnapshot, collection, query, addDoc, setLogLevel, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- Configuration ---
+        // --- Configuration & Data ---
         const NUM_INTERSECTIONS = 8;
-        // Minimum separation time in milliseconds (5 minutes * 60 seconds/min * 1000 ms/sec)
+        const INTERSECTION_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+        // Minimum separation time in milliseconds (5 minutes)
         const MIN_SEPARATION_MS = 5 * 60 * 1000;
         
+        // DISTANCES (in Nautical Miles) for 8 spots (A-H)
+        const ROUTE_DISTANCES = {
+            "VR140": [0, 27, 31, 54, 29, 26, 17, 58], 
+            "VR142": [0, 48, 47, 45, 38, 47, 39, 32],
+            "VR143": [51, 30, 62, 19, 54, 29, 35, 72],
+            "IR123": [0, 72, 56, 43, 35, 9, 18, 0],
+            "SR130": [0, 19, 31, 23, 36, 17, 9, 0],
+            "SR286": [0, 22, 44, 15, 21, 21, 14, 0],
+            "SR287": [0, 19, 18, 23, 23, 17, 58, 0],
+            "SR290": [0, 19, 24, 21, 26, 14, 32, 72],
+            "SR292": [0, 19, 33, 20, 11, 26, 20, 13]
+        };
+
         // --- Firebase Globals ---
         let db;
         let auth;
@@ -93,7 +121,6 @@
         // --- DOM Elements ---
         const form = document.getElementById('addFlightForm');
         const scheduleBody = document.getElementById('scheduleBody');
-        const intersectionInputsContainer = document.getElementById('intersectionInputs');
         const messageBox = document.getElementById('messageBox');
         const userIdDisplay = document.getElementById('userIdDisplay');
         const submitButton = document.getElementById('submitButton');
@@ -108,6 +135,54 @@
             const time = new Date(dateTimeString).getTime();
             return isNaN(time) ? 0 : time;
         }
+        
+        /**
+         * Converts a Date object to a datetime-local string (YYYY-MM-DDTHH:MM).
+         * NOTE: This is for calculating the intersection times which are saved but not displayed.
+         * @param {Date} date - The date object.
+         * @returns {string} The formatted string.
+         */
+        function dateToDatetimeLocal(date) {
+            const pad = (n) => (n < 10 ? '0' + n : n);
+            return date.getFullYear() + '-' +
+                   pad(date.getMonth() + 1) + '-' +
+                   pad(date.getDate()) + 'T' +
+                   pad(date.getHours()) + ':' +
+                   pad(date.getMinutes());
+        }
+
+        /**
+         * Calculates intersection times based on start time, speed, and route distances.
+         * @param {string} startTimeString - The pilot's start date/time (datetime-local format).
+         * @param {number} speedKnots - The airplane speed in knots (NM/hour).
+         * @param {string} routeId - The key for the selected route in ROUTE_DISTANCES.
+         * @returns {Array<string>} An array of 8 calculated intersection times (datetime-local strings).
+         */
+        function calculateIntersectionTimes(startTimeString, speedKnots, routeId) {
+            const distances = ROUTE_DISTANCES[routeId];
+            if (!distances || speedKnots <= 0) return [];
+
+            const startMs = new Date(startTimeString).getTime();
+            const calculatedTimes = [];
+
+            distances.forEach(distanceNM => {
+                // Time (hours) = Distance (NM) / Speed (Knots)
+                const timeHours = distanceNM / speedKnots;
+                
+                // Time (milliseconds) = Time (hours) * 60 min/hr * 60 sec/min * 1000 ms/sec
+                const timeMs = timeHours * 3600 * 1000;
+
+                // Calculated intersection time in milliseconds
+                const intersectionTimeMs = startMs + timeMs;
+                
+                // Convert back to datetime-local string format
+                const intersectionDate = new Date(intersectionTimeMs);
+                calculatedTimes.push(dateToDatetimeLocal(intersectionDate));
+            });
+            
+            return calculatedTimes;
+        }
+
 
         /**
          * Displays a temporary message to the user (e.g., success or error).
@@ -131,8 +206,8 @@
 
         /**
          * Core logic to check for conflicts against all flights in the provided list.
-         * This function calculates the *live* conflict status based on the current data.
-         * @param {Array<Object>} flightsList - The complete list of flights from the database (immutable data).
+         * This version ONLY checks for conflicts between DIFFERENT routes at intersection spots.
+         * @param {Array<Object>} flightsList - The complete list of flights from the database.
          * @returns {Array<Object>} - A new array of flights with live 'status' and 'conflictSpots' added.
          */
         function getLiveSchedule(flightsList) {
@@ -148,25 +223,28 @@
                     const flightA = liveSchedule[i];
                     const flightB = liveSchedule[j];
 
-                    for (let spotIndex = 0; spotIndex < NUM_INTERSECTIONS; spotIndex++) {
-                        const timeA = getTimeInMs(flightA.intersectionTimes[spotIndex]);
-                        const timeB = getTimeInMs(flightB.intersectionTimes[spotIndex]);
+                    // --- ONLY check intersections if the routes are DIFFERENT (Rule #2) ---
+                    if (flightA.routeId !== flightB.routeId) {
+                        for (let spotIndex = 0; spotIndex < NUM_INTERSECTIONS; spotIndex++) {
+                            const timeA = getTimeInMs(flightA.intersectionTimes[spotIndex]);
+                            const timeB = getTimeInMs(flightB.intersectionTimes[spotIndex]);
 
-                        // Check for time difference
-                        if (Math.abs(timeA - timeB) < MIN_SEPARATION_MS && timeA !== 0 && timeB !== 0) {
-                            // Conflict detected at this spot!
-                            const spotNumber = spotIndex + 1;
+                            // Check for time difference
+                            if (Math.abs(timeA - timeB) < MIN_SEPARATION_MS && timeA !== 0 && timeB !== 0) {
+                                // Conflict detected at this spot!
+                                const spotName = INTERSECTION_NAMES[spotIndex];
 
-                            // Update flight A status
-                            flightA.status = 'CONFLICT';
-                            if (!flightA.conflictSpots.includes(spotNumber)) {
-                                flightA.conflictSpots.push(spotNumber);
-                            }
+                                // Update flight A status
+                                flightA.status = 'CONFLICT';
+                                if (!flightA.conflictSpots.includes(spotName)) {
+                                    flightA.conflictSpots.push(spotName);
+                                }
 
-                            // Update flight B status
-                            flightB.status = 'CONFLICT';
-                            if (!flightB.conflictSpots.includes(spotNumber)) {
-                                flightB.conflictSpots.push(spotNumber);
+                                // Update flight B status
+                                flightB.status = 'CONFLICT';
+                                if (!flightB.conflictSpots.includes(spotName)) {
+                                    flightB.conflictSpots.push(spotName);
+                                }
                             }
                         }
                     }
@@ -197,15 +275,18 @@
                     ? 'bg-red-500 text-white' 
                     : 'bg-green-100 text-green-800';
 
+                // Display only the conflict spots if conflict is detected
                 const conflictText = isConflict 
-                    ? `Spot(s): ${flight.conflictSpots.sort((a, b) => a - b).join(', ')}`
+                    ? flight.conflictSpots.sort().join(', ')
                     : '—';
+                
+                const routeInfo = `${flight.routeId} at ${flight.speedKnots}kts`;
 
                 const row = document.createElement('tr');
                 row.className = rowClass + ' transition-colors';
                 row.innerHTML = `
                     <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${flight.flightId}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">${flight.origin} → ${flight.destination}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">${routeInfo}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-center">
                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusBadgeClass}">
                             ${flight.status}
@@ -220,23 +301,8 @@
             });
         }
         
-        /**
-         * Generates the 8 required time inputs for intersection times.
-         */
-        function generateIntersectionInputs() {
-            let html = '';
-            for (let i = 1; i <= NUM_INTERSECTIONS; i++) {
-                html += `
-                    <div>
-                        <label for="intTime${i}" class="block text-xs font-medium text-gray-700 mb-1">Spot ${i}</label>
-                        <input type="datetime-local" id="intTime${i}" required 
-                               placeholder="Spot ${i} Time" 
-                               class="p-3 border border-gray-300 rounded-lg w-full text-sm focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                `;
-            }
-            intersectionInputsContainer.innerHTML = html;
-        }
+        // Removed generateIntersectionInputs and related display/clear functions since we don't display spot times
+
 
         /**
          * Handles form submission to add a new flight.
@@ -250,46 +316,61 @@
             }
 
             submitButton.disabled = true;
-            submitButton.textContent = 'Adding Flight...';
+            submitButton.textContent = 'Checking Rules...';
 
             const flightId = document.getElementById('flightId').value.trim().toUpperCase();
-            const origin = document.getElementById('origin').value.trim().toUpperCase();
-            const destination = document.getElementById('destination').value.trim().toUpperCase();
+            const speedKnots = parseFloat(document.getElementById('speedKnots').value);
+            const routeId = document.getElementById('routeSelector').value;
+            const startTimeString = document.getElementById('startTime').value;
 
-            // Collect all 8 intersection times
-            const intersectionTimes = [];
-            let allTimesValid = true;
-            for (let i = 1; i <= NUM_INTERSECTIONS; i++) {
-                const timeValue = document.getElementById(`intTime${i}`).value;
-                if (!timeValue) {
-                    allTimesValid = false;
-                    break;
-                }
-                intersectionTimes.push(timeValue);
-            }
-
-            if (!allTimesValid) {
-                showMessage("Please fill in all 8 intersection times.", 'error');
+            if (isNaN(speedKnots) || speedKnots <= 0) {
+                showMessage("Please enter a valid speed (Knots > 0).", 'error');
                 submitButton.disabled = false;
-                submitButton.textContent = 'Add Flight & Check Deconfliction';
+                submitButton.textContent = 'Calculate & Schedule Flight';
+                return;
+            }
+            
+            // --- BLOCKING RULE #1: Same Route Time Separation Check ---
+            const newStartTimeMs = getTimeInMs(startTimeString);
+            const existingConflict = flights.some(f => 
+                f.routeId === routeId && 
+                Math.abs(getTimeInMs(f.startTime) - newStartTimeMs) < MIN_SEPARATION_MS
+            );
+            
+            if (existingConflict) {
+                showMessage(`BLOCKED: Cannot schedule ${routeId}. Another flight is scheduled on this route within 5 minutes of your start time.`, 'error');
+                submitButton.disabled = false;
+                submitButton.textContent = 'Calculate & Schedule Flight';
                 return;
             }
 
+            // --- CORE CALCULATION (Required for Intersection Check, even if not displayed) ---
+            const intersectionTimes = calculateIntersectionTimes(startTimeString, speedKnots, routeId);
+
+            if (intersectionTimes.length !== NUM_INTERSECTIONS) {
+                showMessage("Calculation failed. Check route data and inputs.", 'error');
+                submitButton.disabled = false;
+                submitButton.textContent = 'Calculate & Schedule Flight';
+                return;
+            }
+
+
             const newFlightData = {
                 flightId,
-                origin,
-                destination,
-                intersectionTimes,
+                speedKnots,
+                routeId,
+                startTime: startTimeString,
+                intersectionTimes, // Saved for real-time intersection conflict checking
                 createdAt: serverTimestamp(),
                 createdBy: userId
             };
 
-            // Save to Firestore. The onSnapshot listener will handle conflict checking and re-rendering.
+            // Save to Firestore. The onSnapshot listener will handle intersection checking and re-rendering.
             try {
                 const collectionPath = `artifacts/${appId}/public/data/flights`;
                 await addDoc(collection(db, collectionPath), newFlightData);
                 
-                showMessage(`Flight ${flightId} added successfully. Schedule will update in real-time.`, 'success');
+                showMessage(`Flight ${flightId} scheduled successfully. Checking for intersections...`, 'success');
 
             } catch (error) {
                 console.error("Error saving flight:", error);
@@ -298,13 +379,12 @@
                 // Reset form inputs and button state
                 form.reset();
                 submitButton.disabled = false;
-                submitButton.textContent = 'Add Flight & Check Deconfliction';
+                submitButton.textContent = 'Calculate & Schedule Flight';
             }
         });
 
         /**
          * Deletes a flight by ID from Firestore.
-         * @param {string} id - The document ID of the flight to delete.
          */
         window.deleteFlight = async function(id) {
             try {
@@ -333,16 +413,15 @@
                     });
                 });
 
-                // Calculate the live conflict status locally
+                // Calculate the live conflict status locally (Intersection check only)
                 flights = getLiveSchedule(flightsFromDb);
                 
                 // Re-render the schedule table
                 renderSchedule();
             }, (error) => {
                 console.error("Firestore snapshot error:", error);
-                // Only show data retrieval failure if DB was already initialized
                 if (db) {
-                    showMessage(`Data retrieval failed: ${error.message}`, 'error');
+                    showMessage(`Data retrieval failed: ${error.message}. Check your security rules!`, 'error');
                 }
             });
         }
@@ -352,26 +431,31 @@
          * Initializes Firebase and authenticates the user.
          */
         async function initializeFirebase() {
-            appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-
-            if (Object.keys(firebaseConfig).length === 0) {
-                showMessage('Firebase configuration is missing. Cannot save data.', 'error');
-                return;
-            }
-
+            
+            // --- STEP 1: YOUR LIVE FIREBASE CONFIGURATION ---
+            const firebaseConfig = {
+              apiKey: "AIzaSyAXeuJ7JX5Wk-nJJcmuiJUyka7VhFOfFBM",
+              authDomain: "schedulebackend-3f971.firebaseapp.com",
+              projectId: "schedulebackend-3f971",
+              storageBucket: "schedulebackend-3f971.firebasestorage.app",
+              messagingSenderId: "515254394901",
+              appId: "1:515254394901:web:2d1d175efa23b9849a6e1c",
+              measurementId: "G-72W7XFDTZT"
+            };
+            
+            // We use the projectId as the unique application ID for data partitioning in Firestore.
+            appId = firebaseConfig.projectId; 
+            
             try {
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 setLogLevel('debug'); // Enable detailed Firebase logging
 
-                // 1. Authentication
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                // 1. Authentication (Using Anonymous sign-in for simplicity)
+                await signInAnonymously(auth);
+                
+                // Get the User ID after sign-in
                 userId = auth.currentUser?.uid || crypto.randomUUID();
                 userIdDisplay.textContent = `Authenticated User ID: ${userId}`;
                 
@@ -380,14 +464,13 @@
 
             } catch (error) {
                 console.error("Firebase Initialization/Auth failed:", error);
-                showMessage('Initialization failed: Could not connect to the database.', 'error');
+                showMessage('Initialization failed. Check your config and services in the Firebase console.', 'error');
                 userIdDisplay.textContent = `User ID: Error`;
             }
         }
 
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
-            generateIntersectionInputs();
             initializeFirebase();
         });
 
