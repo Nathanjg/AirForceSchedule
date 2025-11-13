@@ -84,13 +84,30 @@
 
     </div>
 
-    <!-- Firebase Imports -->
+    <!-- Firebase Imports and Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, deleteDoc, onSnapshot, collection, query, addDoc, setLogLevel, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- Configuration & Data ---
+        // --- Firebase Globals & DOM References ---
+        let db;
+        let auth;
+        let userId = 'loading...';
+        let appId;
+        let flights = [];
+
+        const form = document.getElementById('addFlightForm');
+        const scheduleBody = document.getElementById('scheduleBody');
+        const messageBox = document.getElementById('messageBox');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        const submitButton = document.getElementById('submitButton');
+
+
+        // ######################################################################
+        // ### DECONFLICTION ENGINE LOGIC (Equivalent to a separate JS file) ###
+        // ######################################################################
+
         const NUM_INTERSECTIONS = 8;
         const INTERSECTION_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
         // Minimum separation time in milliseconds (5 minutes)
@@ -108,23 +125,6 @@
             "SR290": [0, 19, 24, 21, 26, 14, 32, 72],
             "SR292": [0, 19, 33, 20, 11, 26, 20, 13]
         };
-
-        // --- Firebase Globals ---
-        let db;
-        let auth;
-        let userId = 'loading...';
-        let appId;
-        
-        // Local state array (populated by Firestore listener)
-        let flights = [];
-
-        // --- DOM Elements ---
-        const form = document.getElementById('addFlightForm');
-        const scheduleBody = document.getElementById('scheduleBody');
-        const messageBox = document.getElementById('messageBox');
-        const userIdDisplay = document.getElementById('userIdDisplay');
-        const submitButton = document.getElementById('submitButton');
-
 
         /**
          * Converts date/time string to milliseconds for comparison.
@@ -182,27 +182,6 @@
             return calculatedTimes;
         }
 
-
-        /**
-         * Displays a temporary message to the user (e.g., success or error).
-         * @param {string} message - The message content.
-         * @param {string} type - 'success' or 'error'.
-         */
-        function showMessage(message, type = 'success') {
-            messageBox.textContent = message;
-            messageBox.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
-
-            if (type === 'success') {
-                messageBox.classList.add('bg-green-100', 'text-green-800');
-            } else if (type === 'error') {
-                messageBox.classList.add('bg-red-100', 'text-red-800');
-            }
-
-            setTimeout(() => {
-                messageBox.classList.add('hidden');
-            }, 5000);
-        }
-
         /**
          * Core logic to check for conflicts against all flights in the provided list.
          * This version ONLY checks for conflicts between DIFFERENT routes at intersection spots.
@@ -250,6 +229,31 @@
                 }
             }
             return liveSchedule;
+        }
+
+        // ######################################################################
+        // ### END OF DECONFLICTION ENGINE LOGIC ################################
+        // ######################################################################
+
+
+        /**
+         * Displays a temporary message to the user (e.g., success or error).
+         * @param {string} message - The message content.
+         * @param {string} type - 'success' or 'error'.
+         */
+        function showMessage(message, type = 'success') {
+            messageBox.textContent = message;
+            messageBox.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
+
+            if (type === 'success') {
+                messageBox.classList.add('bg-green-100', 'text-green-800');
+            } else if (type === 'error') {
+                messageBox.classList.add('bg-red-100', 'text-red-800');
+            }
+
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 5000);
         }
 
         /**
@@ -350,7 +354,7 @@
                 return;
             }
 
-            // --- CORE CALCULATION (Required for Intersection Check, even if not displayed) ---
+            // --- CORE CALCULATION (Uses the Deconfliction Engine functions) ---
             const intersectionTimes = calculateIntersectionTimes(startTimeString, speedKnots, routeId);
 
             if (intersectionTimes.length !== NUM_INTERSECTIONS) {
@@ -444,8 +448,7 @@
                 });
 
 
-                // Calculate the live conflict status locally (Intersection check only)
-                // Use the filtered and sorted list
+                // Calculate the live conflict status locally (Uses Deconfliction Engine)
                 flights = getLiveSchedule(todayFlights);
                 
                 // Re-render the schedule table
@@ -475,7 +478,6 @@
               measurementId: "G-72W7XFDTZT"
             };
             
-            // We use the projectId as the unique application ID for data partitioning in Firestore.
             appId = firebaseConfig.projectId; 
             
             try {
