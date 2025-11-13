@@ -20,17 +20,12 @@
 </head>
 <body class="p-4 sm:p-8">
     <div class="max-w-6xl mx-auto bg-white shadow-xl rounded-xl p-6 lg:p-10">
-        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">Airspace Schedule Manager (Today's Deconfliction)</h1>
-        <p class="text-gray-600 mb-4">
-            **Rule Check:** Blocks scheduling the same route within 5 minutes of another flight.
-            <br>
-            **Conflict Flag:** Flags intersection conflicts only between flights on **different routes**. Minimum separation is **5 minutes** at any spot.
-        </p>
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">Schedule Manager</h1>
         <p id="userIdDisplay" class="text-sm text-gray-500 mb-8"></p>
 
         <!-- Flight Input Form -->
         <div class="mb-10 p-6 bg-blue-50 rounded-lg border border-blue-200">
-            <h2 class="text-xl font-semibold text-blue-800 mb-4">Pilot Input (Auto-Calculation)</h2>
+            <h2 class="text-xl font-semibold text-blue-800 mb-4">Pilot Input</h2>
             <form id="addFlightForm" class="space-y-4">
                 <!-- Core Flight Info -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -63,7 +58,7 @@
         </div>
         
         <!-- Flight Schedule Table -->
-        <h2 class="text-xl font-semibold text-gray-900 mb-4">Today's Flight Schedule (Chronological Order)</h2>
+        <h2 class="text-xl font-semibold text-gray-900 mb-4">Today's Flight Schedule</h2>
         <div class="scrollable-table shadow-lg rounded-lg border border-gray-200">
             <table class="min-w-full divide-y divide-gray-300">
                 <thead class="sticky top-0 bg-gray-100 z-10">
