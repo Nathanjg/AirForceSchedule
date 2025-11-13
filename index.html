@@ -212,7 +212,7 @@
                                 const timein2 = getTimeInMs(flightB.intersectionTimes[0]);
                                 const timeout1 = getTimeInMs(flightA.intersectionTimes[1]);
                                 const timeout2 = getTimeInMs(flightB.intersectionTimes[1]);
-                                if(timein1 < timein2 < timeout1 || timein1 < timeout2 < timeout1){
+                                if((timein1 < timein2 && timein2 < timeout1) || (timein1 < timeout2 && timeout2 < timeout1)){
                                     MarkConflict(flightA, flightB);
                                 }
                             }
