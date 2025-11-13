@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -19,7 +20,7 @@
 </head>
 <body class="p-4 sm:p-8">
     <div class="max-w-6xl mx-auto bg-white shadow-xl rounded-xl p-6 lg:p-10">
-        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">Airspace Schedule Manager (Deconfliction Mode)</h1>
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">Airspace Schedule Manager (Today's Deconfliction)</h1>
         <p class="text-gray-600 mb-4">
             **Rule Check:** Blocks scheduling the same route within 5 minutes of another flight.
             <br>
@@ -62,12 +63,12 @@
         </div>
         
         <!-- Flight Schedule Table -->
-        <h2 class="text-xl font-semibold text-gray-900 mb-4">Current Flight Schedule</h2>
+        <h2 class="text-xl font-semibold text-gray-900 mb-4">Today's Flight Schedule (Chronological Order)</h2>
         <div class="scrollable-table shadow-lg rounded-lg border border-gray-200">
             <table class="min-w-full divide-y divide-gray-300">
                 <thead class="sticky top-0 bg-gray-100 z-10">
                     <tr>
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Flight ID</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time & Flight ID</th>
                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Route & Speed</th>
                         <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Intersects At Spot(s)</th>
@@ -137,7 +138,6 @@
         
         /**
          * Converts a Date object to a datetime-local string (YYYY-MM-DDTHH:MM).
-         * NOTE: This is for calculating the intersection times which are saved but not displayed.
          * @param {Date} date - The date object.
          * @returns {string} The formatted string.
          */
@@ -259,9 +259,12 @@
             scheduleBody.innerHTML = ''; // Clear existing rows
 
             if (flights.length === 0) {
+                const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
                 scheduleBody.innerHTML = `
                     <tr>
-                        <td colspan="5" class="px-3 py-4 text-center text-gray-500 italic">No flights scheduled. Add one above!</td>
+                        <td colspan="5" class="px-3 py-4 text-center text-gray-500 italic">
+                            No flights scheduled for today (${today}). Add one above!
+                        </td>
                     </tr>
                 `;
                 return;
@@ -280,11 +283,17 @@
                     : '—';
                 
                 const routeInfo = `${flight.routeId} at ${flight.speedKnots}kts`;
+                
+                // Format start time for display (e.g., 15:30)
+                const startTimeDisplay = new Date(flight.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+
 
                 const row = document.createElement('tr');
                 row.className = rowClass + ' transition-colors';
                 row.innerHTML = `
-                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${flight.flightId}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-bold text-gray-900">
+                        <span class="text-blue-600">${startTimeDisplay}</span> - ${flight.flightId}
+                    </td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">${routeInfo}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-center">
                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusBadgeClass}">
@@ -300,8 +309,6 @@
             });
         }
         
-        // Removed generateIntersectionInputs and related display/clear functions since we don't display spot times
-
 
         /**
          * Handles form submission to add a new flight.
@@ -397,7 +404,7 @@
         }
         
         /**
-         * Sets up the real-time listener to Firestore.
+         * Sets up the real-time listener to Firestore, including filtering and sorting.
          */
         function setupRealtimeListener(currentAppId) {
             const flightsColRef = collection(db, `artifacts/${currentAppId}/public/data/flights`);
@@ -412,8 +419,34 @@
                     });
                 });
 
+                // --- 1. Filter for Today's Flights (using client local time) ---
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // Midnight start of today (local)
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1); // Midnight start of tomorrow (local)
+
+                const todayFlights = flightsFromDb.filter(f => {
+                    // Check if f.startTime is a valid string before creating a Date object
+                    if (!f.startTime || typeof f.startTime !== 'string') return false;
+
+                    const flightDate = new Date(f.startTime);
+                    const flightTimeMs = flightDate.getTime();
+                    
+                    // Check if the flight time is on or after today's midnight AND before tomorrow's midnight
+                    return flightTimeMs >= today.getTime() && flightTimeMs < tomorrow.getTime();
+                });
+
+                // --- 2. Sort by Time (Chronological Order) ---
+                todayFlights.sort((a, b) => {
+                    const timeA = getTimeInMs(a.startTime);
+                    const timeB = getTimeInMs(b.startTime);
+                    return timeA - timeB; // Ascending order (earliest first)
+                });
+
+
                 // Calculate the live conflict status locally (Intersection check only)
-                flights = getLiveSchedule(flightsFromDb);
+                // Use the filtered and sorted list
+                flights = getLiveSchedule(todayFlights);
                 
                 // Re-render the schedule table
                 renderSchedule();
@@ -431,7 +464,7 @@
          */
         async function initializeFirebase() {
             
-            // --- STEP 1: YOUR LIVE FIREBASE CONFIGURATION ---
+            // --- STEP 1: YOUR LIVE FIREBASE CONFIGURATION (Placeholder values will be replaced by the environment) ---
             const firebaseConfig = {
               apiKey: "AIzaSyAXeuJ7JX5Wk-nJJcmuiJUyka7VhFOfFBM",
               authDomain: "schedulebackend-3f971.firebaseapp.com",
