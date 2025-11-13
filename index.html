@@ -127,12 +127,17 @@
         };
 
         /**
-         * Converts date/time string to milliseconds for comparison.
-         * @param {string} dateTimeString - ISO format date/time string (e.g., 2025-11-15T10:15).
+         * Converts a time value (string or Firestore Timestamp) to milliseconds for comparison.
+         * * @param {string | Object} timeValue - ISO format date/time string or Firestore Timestamp object.
          * @returns {number} Milliseconds since epoch, or 0 if invalid.
          */
-        function getTimeInMs(dateTimeString) {
-            const time = new Date(dateTimeString).getTime();
+        function getTimeInMs(timeValue) {
+            if (timeValue && typeof timeValue.toDate === 'function') {
+                // Handle Firestore Timestamp object (retrieved from DB)
+                return timeValue.toDate().getTime();
+            }
+            // Handle ISO string (e.g., from intersectionTimes array or initial form input)
+            const time = new Date(timeValue).getTime();
             return isNaN(time) ? 0 : time;
         }
         
@@ -204,7 +209,8 @@
                     // --- ONLY check intersections if the routes are DIFFERENT (Rule #2) ---
                     if (flightA.routeId !== flightB.routeId) {
                         for (let spotIndex = 0; spotIndex < NUM_INTERSECTIONS; spotIndex++) {
-                            const timeA = getTimeInMs(flightA.intersectionTimes[spotIndex]);
+                            // intersectionTimes are saved as ISO strings, so getTimeInMs will handle them
+                            const timeA = getTimeInMs(flightA.intersectionTimes[spotIndex]); 
                             const timeB = getTimeInMs(flightB.intersectionTimes[spotIndex]);
 
                             // Check for time difference
@@ -288,8 +294,9 @@
                 
                 const routeInfo = `${flight.routeId} at ${flight.speedKnots}kts`;
                 
-                // Format start time for display (e.g., 15:30)
-                const startTimeDisplay = new Date(flight.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                // Get the start time (now handled as a Timestamp object from DB)
+                const startTimeDate = flight.startTime.toDate ? flight.startTime.toDate() : new Date(flight.startTime);
+                const startTimeDisplay = startTimeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
 
                 const row = document.createElement('tr');
@@ -340,8 +347,11 @@
                 return;
             }
             
+            // Convert start time string to Date object for saving and comparison
+            const startTimeDate = new Date(startTimeString);
+            const newStartTimeMs = startTimeDate.getTime();
+
             // --- BLOCKING RULE #1: Same Route Time Separation Check ---
-            const newStartTimeMs = getTimeInMs(startTimeString);
             const existingConflict = flights.some(f => 
                 f.routeId === routeId && 
                 Math.abs(getTimeInMs(f.startTime) - newStartTimeMs) < MIN_SEPARATION_MS
@@ -369,7 +379,7 @@
                 flightId,
                 speedKnots,
                 routeId,
-                startTime: startTimeString,
+                startTime: startTimeDate, // <--- SAVED AS DATE OBJECT (Firestore Timestamp for querying)
                 intersectionTimes, // Saved for real-time intersection conflict checking
                 createdAt: serverTimestamp(),
                 createdBy: userId
@@ -430,10 +440,10 @@
                 tomorrow.setDate(tomorrow.getDate() + 1); // Midnight start of tomorrow (local)
 
                 const todayFlights = flightsFromDb.filter(f => {
-                    // Check if f.startTime is a valid string before creating a Date object
-                    if (!f.startTime || typeof f.startTime !== 'string') return false;
+                    // Check if f.startTime is a valid Timestamp object
+                    if (!f.startTime || typeof f.startTime.toDate !== 'function') return false;
 
-                    const flightDate = new Date(f.startTime);
+                    const flightDate = f.startTime.toDate(); // Get Date object from Timestamp
                     const flightTimeMs = flightDate.getTime();
                     
                     // Check if the flight time is on or after today's midnight AND before tomorrow's midnight
