@@ -110,16 +110,17 @@
         
         // DISTANCES (in Nautical Miles) for 8 spots (A-H)
         const ROUTE_DISTANCES = {
-            "VR140": [0, 27, 31, 54, 29, 26, 17, 58], 
-            "VR142": [0, 48, 47, 45, 38, 47, 39, 32],
-            "VR143": [51, 30, 62, 19, 54, 29, 35, 72],
-            "IR123": [0, 72, 56, 43, 35, 9, 18, 0],
-            "SR130": [0, 19, 31, 23, 36, 17, 9, 0],
-            "SR286": [0, 22, 44, 15, 21, 21, 14, 0],
-            "SR287": [0, 19, 18, 23, 23, 17, 58, 0],
-            "SR290": [0, 19, 24, 21, 26, 14, 32, 72],
-            "SR292": [0, 19, 33, 20, 11, 26, 20, 13]
+            "VR140": [182, 240], 
+            "VR142": [140, 178],
+            "VR143": [0, 51],
+            "IR123": [0, 71],
+            "SR130": [50,73,109],
+            "SR286": [22,66,81,111],
+            "SR287": [],
+            "SR290": [43,90,120],
+            "SR292": [100,114]
         };
+
 
         /**
          * Converts a time value (string or Firestore Timestamp) to milliseconds for comparison.
@@ -195,12 +196,11 @@
                 status: 'OK', 
                 conflictSpots: [] 
             }));
-
+            
             for (let i = 0; i < liveSchedule.length; i++) {
                 for (let j = i + 1; j < liveSchedule.length; j++) {
                     const flightA = liveSchedule[i];
                     const flightB = liveSchedule[j];
-
                     // --- ONLY check intersections if the routes are DIFFERENT (Rule #2) ---
                     if (flightA.routeId !== flightB.routeId) {
                         for (let spotIndex = 0; spotIndex < NUM_INTERSECTIONS; spotIndex++) {
