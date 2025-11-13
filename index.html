@@ -202,6 +202,25 @@
                     const flightB = liveSchedule[j];
                     // --- ONLY check intersections if the routes are DIFFERENT (Rule #2) ---
                     if (flightA.routeId !== flightB.routeId) {
+                        if(flightA.routeId == "SR287" || flightB.routeId == "SR287")
+                        {
+                            continue;
+                        }
+                        if(flightA.routeId == "VR140" || flightB.routeId == "VR140"){
+                            if(flightA.routeId == "SR130" || flightB.routeId == "SR130"){
+                                const timein1 = getTimeInMs(flightA.intersectionTimes[0]);
+                                const timein2 = getTimeInMs(flightB.intersectionTimes[0]);
+                                const timeout1 = getTimeInMs(flightA.intersectionTimes[1]);
+                                const timeout2 = getTimeInMs(flightB.intersectionTimes[1]);
+                                if(timein1 < timein2 < timeout1 || timein1 < timeout2 < timeout1){
+                                    MarkConflict(flightA, flightB);
+                                }
+                            }
+                            else{
+                                continue;
+                            }
+                        }
+                    
                         for (let spotIndex = 0; spotIndex < flightA.intersectionTimes.length; spotIndex++) {
                             // intersectionTimes are saved as ISO strings, so getTimeInMs will handle them
                             const timeA = getTimeInMs(flightA.intersectionTimes[spotIndex]); 
@@ -209,26 +228,19 @@
 
                             // Check for time difference
                             if (Math.abs(timeA - timeB) < MIN_SEPARATION_MS && timeA !== 0 && timeB !== 0) {
-                                // Conflict detected at this spot!
-                                const spotName = INTERSECTION_NAMES[spotIndex];
-
-                                // Update flight A status
-                                flightA.status = 'CONFLICT';
-                                if (!flightA.conflictSpots.includes(spotName)) {
-                                    flightA.conflictSpots.push(spotName);
-                                }
-
-                                // Update flight B status
-                                flightB.status = 'CONFLICT';
-                                if (!flightB.conflictSpots.includes(spotName)) {
-                                    flightB.conflictSpots.push(spotName);
-                                }
                             }
                         }
+                
                     }
                 }
             }
             return liveSchedule;
+        }
+        function MarkConflict(flight1, flight2){
+            // Update flight A status
+            flightA.status = 'CONFLICT';
+            // Update flight B status
+            flightB.status = 'CONFLICT';
         }
 
         // ######################################################################
