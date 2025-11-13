@@ -103,7 +103,6 @@
         // ### DECONFLICTION ENGINE LOGIC (Equivalent to a separate JS file) ###
         // ######################################################################
 
-        const NUM_INTERSECTIONS = 8;
         const INTERSECTION_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
         // Minimum separation time in milliseconds (5 minutes)
         const MIN_SEPARATION_MS = 5 * 60 * 1000;
@@ -203,7 +202,7 @@
                     const flightB = liveSchedule[j];
                     // --- ONLY check intersections if the routes are DIFFERENT (Rule #2) ---
                     if (flightA.routeId !== flightB.routeId) {
-                        for (let spotIndex = 0; spotIndex < NUM_INTERSECTIONS; spotIndex++) {
+                        for (let spotIndex = 0; spotIndex < flightA.intersectionTimes.length; spotIndex++) {
                             // intersectionTimes are saved as ISO strings, so getTimeInMs will handle them
                             const timeA = getTimeInMs(flightA.intersectionTimes[spotIndex]); 
                             const timeB = getTimeInMs(flightB.intersectionTimes[spotIndex]);
@@ -361,13 +360,6 @@
 
             // --- CORE CALCULATION (Uses the Deconfliction Engine functions) ---
             const intersectionTimes = calculateIntersectionTimes(startTimeString, speedKnots, routeId);
-
-            if (intersectionTimes.length !== NUM_INTERSECTIONS) {
-                showMessage("Calculation failed. Check route data and inputs.", 'error');
-                submitButton.disabled = false;
-                submitButton.textContent = 'Calculate & Schedule Flight';
-                return;
-            }
 
 
             const newFlightData = {
