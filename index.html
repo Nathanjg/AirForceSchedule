@@ -251,10 +251,10 @@
                                 }
                             }
                             if(flightB.routeId == "IR123"){
-                                timeout1 = getTimeInMs(flightA.intersectionTimes[2]);
+                                const timeout11 = getTimeInMs(flightA.intersectionTimes[2]);
                                 const timein2 = getTimeInMs(flightB.intersectionTimes[0]);
                                 const timeout2 = getTimeInMs(flightB.intersectionTimes[2]);
-                                if((timein1 < timein2 && timein2 < timeout1) || (timein1 < timeout2 && timeout2 < timeout1)){
+                                if((timein1 < timein2 && timein2 < timeout11) || (timein1 < timeout2 && timeout2 < timeout11)){
                                     MarkConflict(flightA, flightB);
                                 } 
                             }
@@ -285,10 +285,10 @@
                             }
                             
                             if(flightB.routeId == "SR292"){
-                                const timein1 = getTimeInMs(flightA.intersectionTimes[2]);
+                                const timein11 = getTimeInMs(flightA.intersectionTimes[2]);
                                 const timein2 = getTimeInMs(flightB.intersectionTimes[0]);
                                 const timeout2 = getTimeInMs(flightB.intersectionTimes[1]);
-                                if((timein1 < timein2 && timein2 < timeout1) || (timein1 < timeout2 && timeout2 < timeout1)){
+                                if((timein11 < timein2 && timein2 < timeout1) || (timein11 < timeout2 && timeout2 < timeout1)){
                                     MarkConflict(flightA, flightB);
                                 }
                             }
