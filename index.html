@@ -206,6 +206,7 @@
                         {
                             continue;
                         }
+                        // Route checking for conflict 1 of 9
                         if(flightA.routeId == "VR140" || flightB.routeId == "VR140"){
                             if(flightA.routeId == "SR130" || flightB.routeId == "SR130"){
                                 const timein1 = getTimeInMs(flightA.intersectionTimes[0]);
@@ -220,17 +221,24 @@
                                 continue;
                             }
                         }
-                    
-                        for (let spotIndex = 0; spotIndex < flightA.intersectionTimes.length; spotIndex++) {
-                            // intersectionTimes are saved as ISO strings, so getTimeInMs will handle them
-                            const timeA = getTimeInMs(flightA.intersectionTimes[spotIndex]); 
-                            const timeB = getTimeInMs(flightB.intersectionTimes[spotIndex]);
-
-                            // Check for time difference
-                            if (Math.abs(timeA - timeB) < MIN_SEPARATION_MS && timeA !== 0 && timeB !== 0) {
+                        if(flightA.routeId == "VR142"){
+                            const timein1 = getTimeInMs(flightA.intersectionTimes[0]);
+                            const timeout1 = getTimeInMs(flightA.intersectionTimes[1]);
+                            if(flightB.routeId == "SR290"){
+                                const timein2 = getTimeInMs(flightB.intersectionTimes[0]);
+                                const timeout2 = getTimeInMs(flightB.intersectionTimes[1]);
+                                if((timein1 < timein2 && timein2 < timeout1) || (timein1 < timeout2 && timeout2 < timeout1)){
+                                    MarkConflict(flightA, flightB);
+                                }
+                            }
+                            if(flightB.routeId == "SR286"){
+                                const timein2 = getTimeInMs(flightB.intersectionTimes[0]);
+                                const timeout2 = getTimeInMs(flightB.intersectionTimes[2]);
+                                if((timein1 < timein2 && timein2 < timeout1) || (timein1 < timeout2 && timeout2 < timeout1)){
+                                    MarkConflict(flightA, flightB);
+                                } 
                             }
                         }
-                
                     }
                 }
             }
