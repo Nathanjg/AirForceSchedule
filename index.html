@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calculated Flight Deconfliction Schedule</title>
+    <title>Calculated Flight Deconfliction Scheduler</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Custom styles for a cleaner look */
@@ -125,20 +125,22 @@
         // ### DECONFLICTION ENGINE LOGIC (Equivalent to a separate JS file) ###
         // ######################################################################
 
-        // Minimum separation time in milliseconds (5 minutes)
-        const MIN_SEPARATION_MS = 5 * 60 * 1000;
+        // Minimum separation time for hard conflict (5 minutes)
+        const MIN_CONFLICT_MS = 5 * 60 * 1000;
+        // Minimum separation time for yellow warning (10 minutes)
+        const MIN_WARNING_MS = 10 * 60 * 1000;
         
         // DISTANCES (in Nautical Miles) for critical points
         const ROUTE_DISTANCES = {
             "VR140": [182, 240], 
             "VR142": [140, 178],
-            "VR143": [0, 51, 322], // 0 to 322 is the full route length
-            "IR123": [0, 71, 367], // 0 to 367 is the full route length
-            "SR130": [50, 73, 109], // 50 to 109 is critical
-            "SR286": [22, 66, 81, 111], // 66 to 111 is critical
+            "VR143": [0, 51, 322], 
+            "IR123": [0, 71, 367], 
+            "SR130": [50, 73, 109], 
+            "SR286": [22, 66, 81, 111], 
             "SR287": [],
-            "SR290": [43, 90, 120], // 43 to 120 is critical
-            "SR292": [100, 114] // 100 to 114 is critical
+            "SR290": [43, 90, 120], 
+            "SR292": [100, 114] 
         };
 
 
@@ -186,16 +188,10 @@
             const calculatedTimes = [];
 
             distances.forEach(distanceNM => {
-                // Time (hours) = Distance (NM) / Speed (Knots)
-                const timeHours = distanceNM / speedKnots;
-                
-                // Time (milliseconds) = Time (hours) * 60 min/hr * 60 sec/min * 1000 ms/sec
-                const timeMs = timeHours * 3600 * 1000;
-
-                // Calculated intersection time in milliseconds
+                // Time (milliseconds) = (Distance / Speed Knots) * 3600 * 1000
+                const timeMs = (distanceNM / speedKnots) * 3600 * 1000;
                 const intersectionTimeMs = startMs + timeMs;
                 
-                // Convert back to datetime-local string format
                 const intersectionDate = new Date(intersectionTimeMs);
                 calculatedTimes.push(dateToDatetimeLocal(intersectionDate));
             });
@@ -204,47 +200,41 @@
         }
 
         /**
-         * Marks two flights as conflicting by adding details of the opposing flight
-         * to the `conflictsWith` array.
+         * Marks two flights with a specific status (CONFLICT or NEAR_CONFLICT) by adding details of the opposing flight.
          */
-        function MarkConflict(flight1, flight2){
-            const conflictDetails1 = {
-                id: flight2.id,
-                flightId: flight2.flightId,
-                routeId: flight2.routeId
-            };
-            const conflictDetails2 = {
-                id: flight1.id,
-                flightId: flight1.flightId,
-                routeId: flight1.routeId
-            };
+        function MarkStatus(flight1, flight2, status) {
+            // Only upgrade status, never downgrade (i.e., don't mark a CONFLICT as NEAR_CONFLICT)
+            if (status === 'CONFLICT' || flight1.status !== 'CONFLICT') {
+                const conflictDetails1 = { id: flight2.id, flightId: flight2.flightId, routeId: flight2.routeId };
+                const conflictDetails2 = { id: flight1.id, flightId: flight1.flightId, routeId: flight1.routeId };
 
-            // Update flight A status
-            flight1.status = 'CONFLICT';
-            if (!flight1.conflictsWith) flight1.conflictsWith = [];
-            
-            // Prevent duplicate conflict entries
-            if (!flight1.conflictsWith.some(c => c.id === flight2.id)) {
-                flight1.conflictsWith.push(conflictDetails1);
-            }
+                // Update flight A status
+                flight1.status = status;
+                if (!flight1.conflictsWith) flight1.conflictsWith = [];
+                
+                // Prevent duplicate conflict entries
+                if (!flight1.conflictsWith.some(c => c.id === flight2.id)) {
+                    flight1.conflictsWith.push(conflictDetails1);
+                }
 
-            // Update flight B status
-            flight2.status = 'CONFLICT';
-            if (!flight2.conflictsWith) flight2.conflictsWith = [];
+                // Update flight B status
+                flight2.status = status;
+                if (!flight2.conflictsWith) flight2.conflictsWith = [];
 
-            // Prevent duplicate conflict entries
-            if (!flight2.conflictsWith.some(c => c.id === flight1.id)) {
-                flight2.conflictsWith.push(conflictDetails2);
+                // Prevent duplicate conflict entries
+                if (!flight2.conflictsWith.some(c => c.id === flight1.id)) {
+                    flight2.conflictsWith.push(conflictDetails2);
+                }
             }
         }
 
         /**
-         * Helper function to determine if two time windows overlap by less than MIN_SEPARATION_MS.
+         * Helper function to determine if two time windows overlap.
          * @param {string} in1 - Entry time for window 1.
          * @param {string} out1 - Exit time for window 1.
          * @param {string} in2 - Entry time for window 2.
          * @param {string} out2 - Exit time for window 2.
-         * @returns {boolean} True if a conflict exists.
+         * @returns {boolean} True if a conflict overlap exists.
          */
         function checkOverlap(in1, out1, in2, out2) {
             const timein1 = getTimeInMs(in1);
@@ -252,41 +242,30 @@
             const timein2 = getTimeInMs(in2);
             const timeout2 = getTimeInMs(out2);
 
-            // Time Separation Check (5-minute rule)
-            // Conflict exists if the time interval intersection is less than MIN_SEPARATION_MS.
-            
-            // Check if intervals overlap
-            const overlapStartsBefore = timein1 < timeout2;
-            const overlapEndsAfter = timeout1 > timein2;
+            // True if the two intervals intersect/overlap
+            return (timein1 < timeout2) && (timeout1 > timein2);
+        }
 
-            if (overlapStartsBefore && overlapEndsAfter) {
-                // Calculate the end time of the earlier flight and the start time of the later flight
-                const earliestEnd = Math.min(timeout1, timeout2);
-                const latestStart = Math.max(timein1, timein2);
-                
-                // The duration of the overlap interval
-                const overlapDuration = earliestEnd - latestStart;
-                
-                // If the overlap duration is large, we check the actual separation.
-                // For simplicity and alignment with the logic in the original prompt, 
-                // we'll stick to the core time window check (A starts during B, or B starts during A) 
-                // combined with the 5-minute minimum separation rule.
-                
-                // Simplified overlap check: if one flight's entry time falls within the other's critical window
-                // PLUS ensure a 5-minute buffer is maintained between the end of the first and start of the second.
-                
-                // For deconfliction, we check if the critical windows intersect at all (time overlap).
-                const areWindowsOverlapping = (timein1 < timeout2) && (timeout1 > timein2);
-                
-                if (areWindowsOverlapping) {
-                    // Check if the separation between the flights is less than 5 minutes.
-                    // This is complex for time intervals. The simpler version used in the user's previous code was:
-                    // (timein1 < timein2 && timein2 < timeout1) || (timein1 < timeout2 && timeout2 < timeout1)
-                    // Let's stick to the principle: if the critical windows overlap in time, it's a CONFLICT.
-                    return true;
-                }
+        /**
+         * Calculates the time gap in milliseconds between two non-overlapping time windows.
+         * Returns 0 if they overlap or touch.
+         */
+        function calculateGapMs(in1, out1, in2, out2) {
+            const timein1 = getTimeInMs(in1);
+            const timeout1 = getTimeInMs(out1);
+            const timein2 = getTimeInMs(in2);
+            const timeout2 = getTimeInMs(out2);
+
+            // Case 1: Window 1 finishes before Window 2 starts
+            if (timeout1 < timein2) {
+                return timein2 - timeout1;
             }
-            return false;
+            // Case 2: Window 2 finishes before Window 1 starts
+            if (timeout2 < timein1) {
+                return timein1 - timeout2;
+            }
+            // Case 3: Overlap or touching
+            return 0;
         }
 
         /**
@@ -297,17 +276,14 @@
         function getCriticalTimes(flight) {
             const times = flight.intersectionTimes;
             switch (flight.routeId) {
-                // Rule 1, 2, 4, 6, 7, 9 (Specific Segments)
-                case "VR140": return [times[0], times[1]]; // 182 NM to 240 NM
-                case "VR142": return [times[0], times[1]]; // 140 NM to 178 NM
-                case "SR130": return [times[0], times[2]]; // 50 NM to 109 NM
-                case "SR290": return [times[0], times[2]]; // 43 NM to 120 NM
-                case "SR292": return [times[0], times[1]]; // 100 NM to 114 NM
-
-                // Rule 3, 5 (Full/Long Segments)
-                case "VR143": return [times[0], times[2]]; // 0 NM to 322 NM (full route)
-                case "IR123": return [times[0], times[2]]; // 0 NM to 367 NM (full route)
-                case "SR286": return [times[1], times[3]]; // 66 NM to 111 NM
+                case "VR140": return [times[0], times[1]]; 
+                case "VR142": return [times[0], times[1]]; 
+                case "SR130": return [times[0], times[2]]; 
+                case "SR290": return [times[0], times[2]]; 
+                case "SR292": return [times[0], times[1]]; 
+                case "VR143": return [times[0], times[2]]; 
+                case "IR123": return [times[0], times[2]]; 
+                case "SR286": return [times[1], times[3]]; 
                 default: return [];
             }
         }
@@ -334,52 +310,63 @@
                         continue;
                     }
 
-                    // --- 1. Same-Route Separation Check (MIN_SEPARATION_MS) ---
+                    // --- 1. Same-Route Separation Check (Red Conflict 5min, Yellow Warning 10min) ---
                     if (flightA.routeId === flightB.routeId) {
                         const timeA = getTimeInMs(flightA.startTime);
                         const timeB = getTimeInMs(flightB.startTime);
-                        if (Math.abs(timeA - timeB) < MIN_SEPARATION_MS) {
-                            MarkConflict(flightA, flightB);
+                        const separationMs = Math.abs(timeA - timeB);
+                        
+                        if (separationMs < MIN_CONFLICT_MS) {
+                            MarkStatus(flightA, flightB, 'CONFLICT');
+                        } else if (separationMs < MIN_WARNING_MS) {
+                            MarkStatus(flightA, flightB, 'NEAR_CONFLICT');
                         }
                     }
 
                     // --- 2. Different-Route Intersection Conflict Check (9 Rules) ---
                     if (flightA.routeId !== flightB.routeId) {
                         
-                        // Function to normalize the check so flightA is always the 'A' route, and flightB is 'B' route
+                        // Helper to execute intersection logic once per pair
                         const checkIntersection = (f1, f2) => {
                             const routePair = [f1.routeId, f2.routeId].sort().join('-');
                             const times1 = getCriticalTimes(f1);
                             const times2 = getCriticalTimes(f2);
                             
-                            // Check if critical times were successfully determined
-                            if (times1.length !== 2 || times2.length !== 2) return false;
+                            if (times1.length !== 2 || times2.length !== 2) return 'OK';
 
                             let shouldCheck = false;
                             
-                            // Check if the route pair is one of the 9 conflict pairs
                             if (
-                                routePair === 'SR130-VR140' || // Rule 1
-                                routePair === 'SR290-VR142' || // Rule 2
-                                routePair === 'SR286-VR142' || // Rule 3
-                                routePair === 'SR130-VR143' || // Rule 4
-                                routePair === 'IR123-VR143' || // Rule 5
-                                routePair === 'IR123-SR130' || // Rule 6
-                                routePair === 'SR286-SR290' || // Rule 7
-                                routePair === 'SR286-SR292' || // Rule 8
-                                routePair === 'SR290-SR292'    // Rule 9
+                                routePair === 'SR130-VR140' || routePair === 'SR290-VR142' || 
+                                routePair === 'SR286-VR142' || routePair === 'SR130-VR143' || 
+                                routePair === 'IR123-VR143' || routePair === 'IR123-SR130' || 
+                                routePair === 'SR286-SR290' || routePair === 'SR286-SR292' || 
+                                routePair === 'SR290-SR292' 
                             ) {
                                 shouldCheck = true;
                             }
 
                             if (shouldCheck) {
-                                return checkOverlap(times1[0], times1[1], times2[0], times2[1]);
+                                // A. Check for HARD CONFLICT (Overlap)
+                                if (checkOverlap(times1[0], times1[1], times2[0], times2[1])) {
+                                    return 'CONFLICT'; 
+                                }
+                                
+                                // B. Check for NEAR CONFLICT (Gap < 10 minutes)
+                                const gapMs = calculateGapMs(times1[0], times1[1], times2[0], times2[1]);
+                                if (gapMs > 0 && gapMs < MIN_WARNING_MS) {
+                                    return 'NEAR_CONFLICT';
+                                }
                             }
-                            return false;
+                            return 'OK'; 
                         };
                         
-                        if (checkIntersection(flightA, flightB)) {
-                            MarkConflict(flightA, flightB);
+                        const intersectionResult = checkIntersection(flightA, flightB);
+                        
+                        if (intersectionResult === 'CONFLICT') {
+                            MarkStatus(flightA, flightB, 'CONFLICT');
+                        } else if (intersectionResult === 'NEAR_CONFLICT') {
+                            MarkStatus(flightA, flightB, 'NEAR_CONFLICT');
                         }
                     }
                 }
@@ -397,12 +384,14 @@
          */
         function showMessage(message, type = 'success') {
             messageBox.textContent = message;
-            messageBox.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
+            messageBox.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800', 'bg-yellow-100', 'text-yellow-800');
 
             if (type === 'success') {
                 messageBox.classList.add('bg-green-100', 'text-green-800');
             } else if (type === 'error') {
                 messageBox.classList.add('bg-red-100', 'text-red-800');
+            } else if (type === 'warning') {
+                 messageBox.classList.add('bg-yellow-100', 'text-yellow-800');
             }
 
             setTimeout(() => {
@@ -473,13 +462,23 @@
 
             flights.forEach(flight => {
                 const isConflict = flight.status === 'CONFLICT';
-                const rowClass = isConflict ? 'bg-red-100 hover:bg-red-200' : 'bg-white hover:bg-gray-50';
-                const statusBadgeClass = isConflict 
-                    ? 'bg-red-500 text-white' 
-                    : 'bg-green-100 text-green-800';
+                const isNearConflict = flight.status === 'NEAR_CONFLICT';
+                
+                let rowClass = 'bg-white hover:bg-gray-50';
+                let statusBadgeClass = 'bg-green-100 text-green-800';
 
+                if (isConflict) {
+                    rowClass = 'bg-red-100 hover:bg-red-200';
+                    statusBadgeClass = 'bg-red-500 text-white';
+                } else if (isNearConflict) {
+                    rowClass = 'bg-yellow-50 hover:bg-yellow-100';
+                    statusBadgeClass = 'bg-yellow-400 text-yellow-900';
+                }
+
+                let statusText = flight.status === 'OK' ? 'OK' : (isNearConflict ? 'WARNING' : 'CONFLICT');
+                
                 let conflictText = '—';
-                if (isConflict && flight.conflictsWith.length > 0) {
+                if (isConflict || isNearConflict) {
                     // Display up to 3 conflicting IDs
                     const ids = flight.conflictsWith.map(c => `${c.flightId} (${c.routeId})`);
                     conflictText = `vs ${ids.slice(0, 3).join(', ')}${ids.length > 3 ? '...' : ''}`;
@@ -501,9 +500,9 @@
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">${routeInfo}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-center">
                         <span class="px-2 block text-xs leading-5 font-semibold rounded-full ${statusBadgeClass}">
-                            ${flight.status}
+                            ${statusText}
                         </span>
-                        ${isConflict ? `<p class="text-xs text-red-700 mt-1 font-medium">${conflictText}</p>` : ''}
+                        ${(isConflict || isNearConflict) ? `<p class="text-xs ${isConflict ? 'text-red-700' : 'text-yellow-700'} mt-1 font-medium">${conflictText}</p>` : ''}
                     </td>
                     <td class="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
                         <button onclick="deleteFlight('${flight.id}')" class="text-red-600 hover:text-red-900 text-xs font-semibold p-1 rounded-md hover:bg-red-100 transition">Delete</button>
@@ -544,13 +543,13 @@
             const startTimeDate = new Date(startTimeString);
             const newStartTimeMs = startTimeDate.getTime();
 
-            // --- BLOCKING RULE #1: Same Route Time Separation Check (Against ALL flights, not just filtered ones) ---
-            const existingSameRouteConflict = dbFlights.some(f => 
+            // --- BLOCKING RULE #1: Same Route Time Separation Check (Red Conflict Check) ---
+            const existingSameRouteRedConflict = dbFlights.some(f => 
                 f.routeId === routeId && 
-                Math.abs(getTimeInMs(f.startTime) - newStartTimeMs) < MIN_SEPARATION_MS
+                Math.abs(getTimeInMs(f.startTime) - newStartTimeMs) < MIN_CONFLICT_MS
             );
             
-            if (existingSameRouteConflict) {
+            if (existingSameRouteRedConflict) {
                 showMessage(`BLOCKED: Cannot schedule ${routeId}. Another flight is scheduled on this route within 5 minutes of your start time.`, 'error');
                 submitButton.disabled = false;
                 submitButton.textContent = 'Schedule Flight';
@@ -559,6 +558,16 @@
 
             // --- CORE CALCULATION (Uses the Deconfliction Engine functions) ---
             const intersectionTimes = calculateIntersectionTimes(startTimeString, speedKnots, routeId);
+
+            // Check if the flight is near-conflicting before saving (for user feedback)
+            const isNearConflict = dbFlights.some(f => 
+                f.routeId === routeId && 
+                Math.abs(getTimeInMs(f.startTime) - newStartTimeMs) < MIN_WARNING_MS
+            );
+            
+            if (isNearConflict) {
+                showMessage(`WARNING: This flight is within 10 minutes of another flight on the same route (${routeId}).`, 'warning');
+            }
 
 
             const newFlightData = {
@@ -571,12 +580,14 @@
                 createdBy: userId
             };
 
-            // Save to Firestore. The onSnapshot listener will handle intersection checking and re-rendering.
+            // Save to Firestore. The onSnapshot listener will handle all intersection checking and re-rendering.
             try {
                 const collectionPath = `artifacts/${appId}/public/data/flights`;
                 await addDoc(collection(db, collectionPath), newFlightData);
                 
-                showMessage(`Flight ${flightId} scheduled successfully. Checking for intersections...`, 'success');
+                if (!isNearConflict) {
+                    showMessage(`Flight ${flightId} scheduled successfully. Checking for intersections...`, 'success');
+                }
 
             } catch (error) {
                 console.error("Error saving flight:", error);
@@ -610,8 +621,10 @@
             // Toggle sort direction
             if (sortOrder.key === 'routeId' && sortOrder.direction === 'asc') {
                 sortOrder = { key: 'routeId', direction: 'desc' };
+                sortRouteButton.textContent = 'Sort by Route (Desc)';
             } else {
                 sortOrder = { key: 'routeId', direction: 'asc' };
+                sortRouteButton.textContent = 'Sort by Route (Asc)';
             }
             // Re-render the view with the new sort order
             processAndRenderFlights();
@@ -622,7 +635,6 @@
          */
         function setupRealtimeListener(currentAppId) {
             const flightsColRef = collection(db, `artifacts/${currentAppId}/public/data/flights`);
-            // We query all flights, and filter/sort them client-side based on the selected date.
             const q = query(flightsColRef);
 
             onSnapshot(q, (snapshot) => {
@@ -651,26 +663,21 @@
         async function initializeFirebase() {
             
             // --- STEP 1: YOUR LIVE FIREBASE CONFIGURATION (Placeholder values will be replaced by the environment) ---
-            const firebaseConfig = {
-              apiKey: "AIzaSyAXeuJ7JX5Wk-nJJcmuiJUyka7VhFOfFBM",
-              authDomain: "schedulebackend-3f971.firebaseapp.com",
-              projectId: "schedulebackend-3f971",
-              storageBucket: "schedulebackend-3f971.firebasestorage.app",
-              messagingSenderId: "515254394901",
-              appId: "1:515254394901:web:2d1d175efa23b9849a6e1c",
-              measurementId: "G-72W7XFDTZT"
-            };
-            
-            appId = firebaseConfig.projectId; 
-            
+            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+            appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
             try {
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 setLogLevel('debug'); // Enable detailed Firebase logging
 
-                // 1. Authentication (Using Anonymous sign-in for simplicity)
-                await signInAnonymously(auth);
+                // 1. Authentication
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else { 
+                    await signInAnonymously(auth);
+                }
                 
                 // Get the User ID after sign-in
                 userId = auth.currentUser?.uid || crypto.randomUUID();
@@ -678,7 +685,9 @@
 
                 // Set initial date input to today
                 selectedDate = new Date();
-                scheduleDateInput.valueAsDate = selectedDate;
+                // Format date string for the input
+                const today = new Date();
+                scheduleDateInput.value = today.toISOString().split('T')[0];
                 
                 // Set up event listeners for sorting and date change
                 scheduleDateInput.addEventListener('change', (e) => {
