@@ -498,7 +498,7 @@
             const targetDate = new Date(selectedDate);
             targetDate.setHours(0, 0, 0, 0); 
             const nextDay = new Date(targetDate);
-            nextDay.setDate(nextDay.getDate() + 1); 
+            nextDay.setDate(nextDay.getDate() - 1); 
 
             let displayFlights = dbFlights.filter(f => {
                 if (!f.startTime || typeof f.startTime.toDate !== 'function') return false;
@@ -506,7 +506,7 @@
                 const flightTimeMs = flightDate.getTime();
 
                 // Filter to include flights only within the 24-hour window of the selected date
-                return flightTimeMs >= targetDate.getTime() && flightTimeMs < nextDay.getTime();
+                return flightTimeMs >= nextDate.getTime() && flightTimeMs < targetDay.getTime();
             });
 
             // --- 2. Sort Flights ---
