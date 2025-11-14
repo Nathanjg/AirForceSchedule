@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calculated Flight Deconfliction Schedule</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Randolph Routes</title>
+    <!-- Code by Lt. Guy -->
+    <!--script src="https://cdn.tailwindcss.com"></script-->
     <style>
         /* Custom styles for a cleaner look */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -21,21 +22,8 @@
 <body class="p-4 sm:p-8">
     <div class="max-w-6xl mx-auto bg-white shadow-xl rounded-xl p-6 lg:p-10">
         <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">Schedule Manager</h1>
-        <p id="userIdDisplay" class="text-sm text-gray-500 mb-8"></p>
-
-        <!-- New: Date Selector and Sort -->
-        <div class="flex flex-col sm:flex-row gap-4 mb-6 p-4 bg-gray-100 rounded-lg border border-gray-200">
-            <div class="flex-grow">
-                <label for="scheduleDate" class="block text-sm font-medium text-gray-700 mb-1">View Schedule For:</label>
-                <input type="date" id="scheduleDate" class="p-2 border border-gray-300 rounded-lg w-full focus:ring-blue-500 focus:border-blue-500 bg-white">
-            </div>
-            <div class="flex items-end">
-                <button id="sortRouteButton" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-150 shadow-md whitespace-nowrap">
-                    Sort by Route
-                </button>
-            </div>
-        </div>
-        <!-- End New -->
+        
+        <!--<p id="userIdDisplay" class="text-sm text-gray-500 mb-8"></p> -->
 
         <!-- Flight Input Form -->
         <div class="mb-10 p-6 bg-blue-50 rounded-lg border border-blue-200">
@@ -68,8 +56,23 @@
                 </button>
             </form>
         </div>
+        
         <div id="messageBox" class="mt-4 p-4 rounded-lg hidden" role="alert"></div>
 
+        <!-- New: Date Selector and Sort -->
+        <div class="flex flex-col sm:flex-row gap-4 mb-6 p-4 bg-gray-100 rounded-lg border border-gray-200">
+            <div class="flex-grow">
+                <label for="scheduleDate" class="block text-sm font-medium text-gray-700 mb-1">View Schedule For:</label>
+                <input type="date" id="scheduleDate" class="p-2 border border-gray-300 rounded-lg w-full focus:ring-blue-500 focus:border-blue-500 bg-white">
+            </div>
+            <div class="flex items-end">
+                <button id="sortRouteButton" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-150 shadow-md whitespace-nowrap">
+                    Sort by Route
+                </button>
+            </div>
+        </div>
+        <!-- End New -->
+        
         <!-- Flight Schedule Table -->
         <h2 class="text-xl font-semibold text-gray-900 mb-4">Current Flight Schedule</h2>
         <div class="scrollable-table shadow-lg rounded-lg border border-gray-200">
