@@ -95,7 +95,6 @@
     <!-- Firebase Imports and Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // MODIFIED: Added onAuthStateChanged to the import list for robustness
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, deleteDoc, onSnapshot, collection, query, addDoc, setLogLevel, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -663,8 +662,20 @@
          */
         async function initializeFirebase() {
             
-            // --- STEP 1: LOAD FIREBASE CONFIGURATION ---
-            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+            // --- STEP 1: LOAD FIREBASE CONFIGURATION (SAFELY) ---
+            let firebaseConfig = {};
+            try {
+                // Attempt to parse the provided config string
+                firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+            } catch (e) {
+                console.error("Failed to parse __firebase_config, using minimal default.", e);
+            }
+
+            // MANDATORY FIX: Ensure the config object has a projectId to satisfy the Firebase SDK initialization requirement
+            if (!firebaseConfig.projectId) {
+                firebaseConfig.projectId = 'placeholder-project-id';
+            }
+            
             appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
             try {
@@ -676,7 +687,6 @@
 
                 // 2. Authentication
                 if (typeof __initial_auth_token !== 'undefined') {
-                    // Ensure the function is called correctly, relying on the robust import above
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else { 
                     await signInAnonymously(auth);
@@ -703,8 +713,8 @@
 
             } catch (error) {
                 console.error("Firebase Initialization/Auth failed:", error);
-                // Enhanced message to hint at the configuration issue
-                showMessage(`Initialization failed. The provided Firebase configuration appears invalid, or authentication failed: ${error.message}. Check console for details.`, 'error');
+                // The projectId check should prevent the error 705, but keep robust logging.
+                showMessage(`Initialization failed. Check console for details. Error: ${error.message}`, 'error');
                 userIdDisplay.textContent = `User ID: Error`;
             }
         }
