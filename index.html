@@ -355,10 +355,10 @@
                     // --- 2. Different-Route Intersection Conflict Check (9 Rules) ---
                     if (flightA.routeId !== flightB.routeId) {
                         const result = checkIntersection(flightA, flightB);
-                        if (result = "CONFLICT") {
+                        if (result == "CONFLICT") {
                             MarkConflict(flightA, flightB);
                         }
-                        if(result = "WARNING"){
+                        if(result == "WARNING"){
                             MarkWarning(flightA, flightB);
                         }
                     }
