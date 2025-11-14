@@ -495,26 +495,21 @@
          */
         function processAndRenderFlights() {
             // --- 1. Filter for Selected Date's Flights ---
-            // Use UTC methods to avoid local timezone issues
             const targetDate = new Date(selectedDate);
-            // Set to the start of the day in UTC
+            // Set the target date to midnight UTC of the selected day
             targetDate.setUTCHours(0, 0, 0, 0); 
+            
+            // Calculate the next day's midnight UTC consistently
             const nextDay = new Date(targetDate);
-            // Add one day (24 hours) in UTC
-            nextDay.setUTCDate(nextDay.getUTCDate() + 1); 
-
+            nextDay.setUTCDate(targetDate.getUTCDate() + 1); // Use getUTCDate/setUTCDate consistently
+            
             let displayFlights = dbFlights.filter(f => {
-                if (!f.startTime || typeof f.startTime.toDate !== 'function') return false;
-                const flightDate = f.startTime.toDate(); // Assuming this returns a Date object, potentially in UTC
-
-                // Ensure flightDate is handled correctly (e.g., if it's already a UTC date from a server)
-                // If f.startTime.toDate() returns a UTC date, the comparison works.
-                // If it returns a local date, you'd need to convert it to UTC first.
-                // Assuming it's a standard Firebase timestamp to Date conversion which handles timezones well:
-                const flightTimeMs = flightDate.getTime(); 
-
-                // Filter to include flights only within the 24-hour window of the selected date (in UTC terms)
-                return flightTimeMs >= targetDate.getTime() && flightTimeMs < nextDay.getTime();
+              if (!f.startTime || typeof f.startTime.toDate !== 'function') return false;
+              const flightDate = f.startTime.toDate(); // Assuming toDate() returns a standard JS Date object in UTC
+            
+              const flightTimeMs = flightDate.getTime();
+              // Compare timestamps, which are always in UTC milliseconds
+              return flightTimeMs >= targetDate.getTime() && flightTimeMs < nextDay.getTime();
             });
             // --- 2. Sort Flights ---
             displayFlights.sort((a, b) => {
