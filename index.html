@@ -23,7 +23,6 @@
         <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">Schedule Manager</h1>
         <p id="userIdDisplay" class="text-sm text-gray-500 mb-8"></p>
 
-        <!-- New: Date Selector and Sort -->
         <div class="flex flex-col sm:flex-row gap-4 mb-6 p-4 bg-gray-100 rounded-lg border border-gray-200">
             <div class="flex-grow">
                 <label for="scheduleDate" class="block text-sm font-medium text-gray-700 mb-1">View Schedule For:</label>
@@ -35,13 +34,9 @@
                 </button>
             </div>
         </div>
-        <!-- End New -->
-
-        <!-- Flight Input Form -->
         <div class="mb-10 p-6 bg-blue-50 rounded-lg border border-blue-200">
             <h2 class="text-xl font-semibold text-blue-800 mb-4">Pilot Input</h2>
             <form id="addFlightForm" class="space-y-4">
-                <!-- Core Flight Info -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <input type="text" id="flightId" required placeholder="Callsign (e.g., UA123)" class="p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
                     
@@ -59,8 +54,8 @@
                         <option value="SR292">SR292</option>
                     </select>
                     <input type="datetime-local" id="startTime" required 
-                           placeholder="Start Day/Time" 
-                           class="p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            placeholder="Start Day/Time" 
+                            class="p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
                 </div>
                 
                 <button type="submit" id="submitButton" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-150 shadow-md">
@@ -70,7 +65,6 @@
         </div>
         <div id="messageBox" class="mt-4 p-4 rounded-lg hidden" role="alert"></div>
 
-        <!-- Flight Schedule Table -->
         <h2 class="text-xl font-semibold text-gray-900 mb-4">Current Flight Schedule</h2>
         <div class="scrollable-table shadow-lg rounded-lg border border-gray-200">
             <table class="min-w-full divide-y divide-gray-300">
@@ -83,12 +77,10 @@
                     </tr>
                 </thead>
                 <tbody id="scheduleBody" class="bg-white divide-y divide-gray-200">
-                    <!-- Flight rows will be inserted here -->
-                </tbody>
+                    </tbody>
             </table>
         </div>
     </div>
-    <!-- Firebase Imports and Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -122,6 +114,8 @@
 
         // Minimum separation time in milliseconds (5 minutes)
         const MIN_SEPARATION_MS = 5 * 60 * 1000;
+        // WARNING threshold time in milliseconds (10 minutes) - NEW
+        const WARNING_SEPARATION_MS = 10 * 60 * 1000;
 
         // DISTANCES (in Nautical Miles) for critical points
         const ROUTE_DISTANCES = {
@@ -228,6 +222,42 @@
                 flight2.conflictsWith.push(conflictDetails2);
             }
         }
+        
+        /**
+         * Marks two flights as warning by adding details of the opposing flight
+         * to the `warningsWith` array. - NEW FUNCTION
+         */
+        function MarkWarning(flight1, flight2) {
+            // Only mark as WARNING if not already marked as CONFLICT
+            if (flight1.status !== 'CONFLICT') {
+                flight1.status = 'WARNING';
+            }
+            if (flight2.status !== 'CONFLICT') {
+                flight2.status = 'WARNING';
+            }
+            
+            const warningDetails1 = {
+                id: flight2.id,
+                flightId: flight2.flightId,
+                routeId: flight2.routeId
+            };
+            const warningDetails2 = {
+                id: flight1.id,
+                flightId: flight1.flightId,
+                routeId: flight1.routeId
+            };
+
+            if (!flight1.warningsWith) flight1.warningsWith = [];
+            if (!flight2.warningsWith) flight2.warningsWith = [];
+
+            // Prevent duplicate warning entries
+            if (!flight1.warningsWith.some(c => c.id === flight2.id)) {
+                flight1.warningsWith.push(warningDetails1);
+            }
+            if (!flight2.warningsWith.some(c => c.id === flight1.id)) {
+                flight2.warningsWith.push(warningDetails2);
+            }
+        }
 
         /**
          * Helper function to determine if two time windows overlap by less than MIN_SEPARATION_MS.
@@ -251,32 +281,50 @@
             const overlapEndsAfter = timeout1 > timein2;
 
             if (overlapStartsBefore && overlapEndsAfter) {
-                // Calculate the end time of the earlier flight and the start time of the later flight
-                const earliestEnd = Math.min(timeout1, timeout2);
-                const latestStart = Math.max(timein1, timein2);
-
-                // The duration of the overlap interval
-                const overlapDuration = earliestEnd - latestStart;
-
-                // If the overlap duration is large, we check the actual separation.
-                // For simplicity and alignment with the logic in the original prompt, 
-                // we'll stick to the core time window check (A starts during B, or B starts during A) 
-                // combined with the 5-minute minimum separation rule.
-
-                // Simplified overlap check: if one flight's entry time falls within the other's critical window
-                // PLUS ensure a 5-minute buffer is maintained between the end of the first and start of the second.
-
                 // For deconfliction, we check if the critical windows intersect at all (time overlap).
                 const areWindowsOverlapping = (timein1 < timeout2) && (timeout1 > timein2);
 
                 if (areWindowsOverlapping) {
-                    // Check if the separation between the flights is less than 5 minutes.
-                    // This is complex for time intervals. The simpler version used in the user's previous code was:
-                    // (timein1 < timein2 && timein2 < timeout1) || (timein1 < timeout2 && timeout2 < timeout1)
                     // Let's stick to the principle: if the critical windows overlap in time, it's a CONFLICT.
                     return true;
                 }
             }
+            return false;
+        }
+        
+        /**
+         * Checks if two critical windows are within WARNING_SEPARATION_MS of each other (10 minutes). - NEW FUNCTION
+         * This applies when the windows do NOT overlap (i.e., not a CONFLICT), but are close.
+         * @param {string} in1 - Entry time for window 1.
+         * @param {string} out1 - Exit time for window 1.
+         * @param {string} in2 - Entry time for window 2.
+         * @param {string} out2 - Exit time for window 2.
+         * @returns {boolean} True if a warning exists.
+         */
+        function checkWarningProximity(in1, out1, in2, out2) {
+            const timein1 = getTimeInMs(in1);
+            const timeout1 = getTimeInMs(out1);
+            const timein2 = getTimeInMs(in2);
+            const timeout2 = getTimeInMs(out2);
+
+            // Check for NO OVERLAP
+            const noOverlap = (timeout1 <= timein2) || (timeout2 <= timein1);
+            
+            if (noOverlap) {
+                // Separation time is the time between the end of the first and the start of the second.
+                let separation = 0;
+                if (timeout1 <= timein2) {
+                    // Flight 1 ends, then Flight 2 starts
+                    separation = timein2 - timeout1;
+                } else {
+                    // Flight 2 ends, then Flight 1 starts
+                    separation = timein1 - timeout2;
+                }
+
+                // If separation is positive (no overlap) and less than WARNING_SEPARATION_MS, it's a WARNING
+                return separation > 0 && separation < WARNING_SEPARATION_MS;
+            }
+
             return false;
         }
 
@@ -306,14 +354,15 @@
         /**
          * Core logic to check for conflicts against all flights in the provided list.
          * @param {Array<Object>} flightsList - The complete list of flights from the database.
-         * @returns {Array<Object>} - A new array of flights with live 'status' and 'conflictsWith' added.
+         * @returns {Array<Object>} - A new array of flights with live 'status', 'conflictsWith', and 'warningsWith' added.
          */
         function getLiveSchedule(flightsList) {
-            // Create a working copy, resetting conflict state
+            // Create a working copy, resetting conflict/warning state
             const liveSchedule = flightsList.map(f => ({ 
                 ...f, 
                 status: 'OK', 
-                conflictsWith: [] // {id, flightId, routeId}
+                conflictsWith: [], // {id, flightId, routeId}
+                warningsWith: [] // NEW
             }));
 
             for (let i = 0; i < liveSchedule.length; i++) {
@@ -325,31 +374,28 @@
                         continue;
                     }
 
-                    // --- 1. Same-Route Separation Check (MIN_SEPARATION_MS) ---
+                    // --- 1. Same-Route Separation Check (MIN_SEPARATION_MS = CONFLICT) ---
                     if (flightA.routeId === flightB.routeId) {
                         const timeA = getTimeInMs(flightA.startTime);
                         const timeB = getTimeInMs(flightB.startTime);
-                        if (Math.abs(timeA - timeB) < MIN_SEPARATION_MS) {
+                        const separation = Math.abs(timeA - timeB);
+                        
+                        // Check for CONFLICT (less than 5 minutes)
+                        if (separation < MIN_SEPARATION_MS) {
                             MarkConflict(flightA, flightB);
+                        } 
+                        // NEW: Check for WARNING (less than 10 minutes, but not a conflict)
+                        else if (separation < WARNING_SEPARATION_MS) {
+                             MarkWarning(flightA, flightB);
                         }
                     }
 
-                    // --- 2. Different-Route Intersection Conflict Check (9 Rules) ---
+                    // --- 2. Different-Route Intersection Conflict/Warning Check (9 Rules) ---
                     if (flightA.routeId !== flightB.routeId) {
 
-                        // Function to normalize the check so flightA is always the 'A' route, and flightB is 'B' route
-                        const checkIntersection = (f1, f2) => {
+                        const checkRoutePair = (f1, f2) => {
                             const routePair = [f1.routeId, f2.routeId].sort().join('-');
-                            const times1 = getCriticalTimes(f1);
-                            const times2 = getCriticalTimes(f2);
-
-                            // Check if critical times were successfully determined
-                            if (times1.length !== 2 || times2.length !== 2) return false;
-
-                            let shouldCheck = false;
-
-                            // Check if the route pair is one of the 9 conflict pairs
-                            if (
+                            return (
                                 routePair === 'SR130-VR140' || // Rule 1
                                 routePair === 'SR290-VR142' || // Rule 2
                                 routePair === 'SR286-VR142' || // Rule 3
@@ -359,18 +405,23 @@
                                 routePair === 'SR286-SR290' || // Rule 7
                                 routePair === 'SR286-SR292' || // Rule 8
                                 routePair === 'SR290-SR292'    // Rule 9
-                            ) {
-                                shouldCheck = true;
-                            }
-
-                            if (shouldCheck) {
-                                return checkOverlap(times1[0], times1[1], times2[0], times2[1]);
-                            }
-                            return false;
+                            );
                         };
 
-                        if (checkIntersection(flightA, flightB)) {
-                            MarkConflict(flightA, flightB);
+                        if (checkRoutePair(flightA, flightB)) {
+                            const timesA = getCriticalTimes(flightA);
+                            const timesB = getCriticalTimes(flightB);
+                            
+                            if (timesA.length !== 2 || timesB.length !== 2) continue;
+
+                            // ** CONFLICT Check: Check for critical window overlap **
+                            if (checkOverlap(timesA[0], timesA[1], timesB[0], timesB[1])) {
+                                MarkConflict(flightA, flightB);
+                            }
+                            // ** WARNING Check: Check for critical windows within 10 minutes, only if not already a conflict **
+                            else if (checkWarningProximity(timesA[0], timesA[1], timesB[0], timesB[1])) {
+                                MarkWarning(flightA, flightB);
+                            }
                         }
                     }
                 }
@@ -460,221 +511,30 @@
             }
             flights.forEach(flight => {
                 const isConflict = flight.status === 'CONFLICT';
-                const rowClass = isConflict ? 'bg-red-100 hover:bg-red-200' : 'bg-white hover:bg-gray-50';
-                const statusBadgeClass = isConflict 
-                    ? 'bg-red-500 text-white' 
-                    : 'bg-green-100 text-green-800';
-
+                const isWarning = flight.status === 'WARNING' && !isConflict; // Only show warning if not a conflict
+                
+                let rowClass = 'bg-white hover:bg-gray-50';
+                let statusBadgeClass = 'bg-green-100 text-green-800';
                 let conflictText = '—';
-                if (isConflict && flight.conflictsWith.length > 0) {
-                    // Display up to 3 conflicting IDs
-                    const ids = flight.conflictsWith.map(c => `${c.flightId} (${c.routeId})`);
-                    conflictText = `vs ${ids.slice(0, 3).join(', ')}${ids.length > 3 ? '...' : ''}`;
+                let conflictTextColor = 'text-gray-500';
+
+                if (isConflict) {
+                    rowClass = 'bg-red-100 hover:bg-red-200';
+                    statusBadgeClass = 'bg-red-500 text-white';
+                    if (flight.conflictsWith.length > 0) {
+                        const ids = flight.conflictsWith.map(c => `${c.flightId} (${c.routeId})`);
+                        conflictText = `vs ${ids.slice(0, 3).join(', ')}${ids.length > 3 ? '...' : ''}`;
+                        conflictTextColor = 'text-red-700';
+                    }
+                } else if (isWarning) {
+                    // NEW: Warning styles
+                    rowClass = 'bg-yellow-50 hover:bg-yellow-100';
+                    statusBadgeClass = 'bg-yellow-500 text-black';
+                    if (flight.warningsWith.length > 0) {
+                        const ids = flight.warningsWith.map(c => `${c.flightId} (${c.routeId})`);
+                        conflictText = `vs ${ids.slice(0, 3).join(', ')}${ids.length > 3 ? '...' : ''}`;
+                        conflictTextColor = 'text-yellow-700';
+                    }
                 }
 
-                const routeInfo = `${flight.routeId} at ${flight.speedKnots}kts`;
-
-                // Get the start time
-                const startTimeDate = flight.startTime.toDate ? flight.startTime.toDate() : new Date(flight.startTime);
-                const startTimeDisplay = startTimeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-
-                const row = document.createElement('tr');
-                row.className = rowClass + ' transition-colors';
-                row.innerHTML = `
-                    <td class="px-3 py-3 whitespace-nowrap text-sm font-bold text-gray-900">
-                        <span class="text-blue-600">${startTimeDisplay}</span> - ${flight.flightId}
-                    </td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">${routeInfo}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-center">
-                        <span class="px-2 block text-xs leading-5 font-semibold rounded-full ${statusBadgeClass}">
-                            ${flight.status}
-                        </span>
-                        ${isConflict ? `<p class="text-xs text-red-700 mt-1 font-medium">${conflictText}</p>` : ''}
-                    </td>
-                    <td class="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
-                        <button onclick="deleteFlight('${flight.id}')" class="text-red-600 hover:text-red-900 text-xs font-semibold p-1 rounded-md hover:bg-red-100 transition">Delete</button>
-                    </td>
-                `;
-                scheduleBody.appendChild(row);
-            });
-        }
-        
-        /**
-         * Handles form submission to add a new flight.
-         */
-        form.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            if (!db) {
-                showMessage("Database is not initialized. Please wait or check initialization.", 'error');
-                return;
-            }
-            submitButton.disabled = true;
-            submitButton.textContent = 'Checking Rules...';
-            const flightId = document.getElementById('flightId').value.trim().toUpperCase();
-            const speedKnots = parseFloat(document.getElementById('speedKnots').value);
-            const routeId = document.getElementById('routeSelector').value;
-            const startTimeString = document.getElementById('startTime').value;
-            if (isNaN(speedKnots) || speedKnots <= 0) {
-                showMessage("Please enter a valid speed (Knots > 0).", 'error');
-                submitButton.disabled = false;
-                submitButton.textContent = 'Calculate & Schedule Flight';
-                return;
-            }
-            
-            // Convert start time string to Date object for saving and comparison
-            const startTimeDate = new Date(startTimeString);
-            const newStartTimeMs = startTimeDate.getTime();
-
-            // --- BLOCKING RULE #1: Same Route Time Separation Check (Against ALL flights, not just filtered ones) ---
-            const existingSameRouteConflict = dbFlights.some(f => 
-                f.routeId === routeId && 
-                Math.abs(getTimeInMs(f.startTime) - newStartTimeMs) < MIN_SEPARATION_MS
-            );
-
-            if (existingSameRouteConflict) {
-                showMessage(`BLOCKED: Cannot schedule ${routeId}. Another flight is scheduled on this route within 5 minutes of your start time.`, 'error');
-                submitButton.disabled = false;
-                submitButton.textContent = 'Schedule Flight';
-                return;
-            }
-
-            // --- CORE CALCULATION (Uses the Deconfliction Engine functions) ---
-            const intersectionTimes = calculateIntersectionTimes(startTimeString, speedKnots, routeId);
-            const newFlightData = {
-                flightId,
-                speedKnots,
-                routeId,
-                startTime: startTimeDate, // <--- SAVED AS DATE OBJECT (Firestore Timestamp for querying)
-                intersectionTimes, // Saved for real-time intersection conflict checking
-                createdAt: serverTimestamp(),
-                createdBy: userId
-            };
-            // Save to Firestore. The onSnapshot listener will handle intersection checking and re-rendering.
-            try {
-                const collectionPath = `artifacts/${appId}/public/data/flights`;
-                await addDoc(collection(db, collectionPath), newFlightData);
-                
-                showMessage(`Flight ${flightId} scheduled successfully. Checking for intersections...`, 'success');
-            } catch (error) {
-                console.error("Error saving flight:", error);
-                showMessage(`Error saving flight: ${error.message}`, 'error');
-            } finally {
-                // Reset form inputs and button state
-                form.reset();
-                submitButton.disabled = false;
-                submitButton.textContent = 'Schedule Flight';
-            }
-        });
-
-        /**
-         * Deletes a flight by ID from Firestore.
-         */
-        window.deleteFlight = async function(id) {
-            try {
-                const docPath = `artifacts/${appId}/public/data/flights/${id}`;
-                await deleteDoc(doc(db, docPath));
-                showMessage('Flight deletion requested. Schedule re-evaluated.', 'success');
-            } catch (error) {
-                console.error("Error deleting flight:", error);
-                showMessage(`Error deleting flight: ${error.message}`, 'error');
-            }
-        }
-
-        /**
-         * Handles the click event for the Sort by Route button.
-         */
-        function handleRouteSort() {
-            // Toggle sort direction
-            if (sortOrder.key === 'routeId' && sortOrder.direction === 'asc') {
-                sortOrder = { key: 'routeId', direction: 'desc' };
-            } else {
-                sortOrder = { key: 'routeId', direction: 'asc' };
-            }
-            // Re-render the view with the new sort order
-            processAndRenderFlights();
-        }
-
-        /**
-         * Sets up the real-time listener to Firestore.
-         */
-        function setupRealtimeListener(currentAppId) {
-            const flightsColRef = collection(db, `artifacts/${currentAppId}/public/data/flights`);
-            // We query all flights, and filter/sort them client-side based on the selected date.
-            const q = query(flightsColRef);
-
-            onSnapshot(q, (snapshot) => {
-                dbFlights = []; // Clear global list of all DB flights
-                snapshot.forEach(doc => {
-                    dbFlights.push({
-                        id: doc.id,
-                        ...doc.data()
-                    });
-                });
-
-                // Process the newly fetched data (filters by date, sorts, calculates conflicts, and renders)
-                processAndRenderFlights();
-            }, (error) => {
-                console.error("Firestore snapshot error:", error);
-                if (db) {
-                    showMessage(`Data retrieval failed: ${error.message}. Check your security rules!`, 'error');
-                }
-            });
-        }
-        /**
-         * Initializes Firebase and authenticates the user.
-         */
-        async function initializeFirebase() {
-            
-            // --- STEP 1: YOUR LIVE FIREBASE CONFIGURATION (Placeholder values will be replaced by the environment) ---
-            const firebaseConfig = {
-              apiKey: "AIzaSyAXeuJ7JX5Wk-nJJcmuiJUyka7VhFOfFBM",
-              authDomain: "schedulebackend-3f971.firebaseapp.com",
-              projectId: "schedulebackend-3f971",
-              storageBucket: "schedulebackend-3f971.firebasestorage.app",
-              messagingSenderId: "515254394901",
-              appId: "1:515254394901:web:2d1d175efa23b9849a6e1c",
-              measurementId: "G-72W7XFDTZT"
-            };
-            
-            appId = firebaseConfig.projectId; 
-            
-            try {
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                setLogLevel('debug'); // Enable detailed Firebase logging
-                // 1. Authentication (Using Anonymous sign-in for simplicity)
-                await signInAnonymously(auth);
-                
-                // Get the User ID after sign-in
-                userId = auth.currentUser?.uid || crypto.randomUUID();
-                userIdDisplay.textContent = `Authenticated User ID: ${userId}`;
-
-                // Set initial date input to today
-                selectedDate = new Date();
-                scheduleDateInput.valueAsDate = selectedDate;
-
-                // Set up event listeners for sorting and date change
-                scheduleDateInput.addEventListener('change', (e) => {
-                    // Update global selected date and process the schedule
-                    selectedDate = new Date(e.target.value);
-                    processAndRenderFlights();
-                });
-                sortRouteButton.addEventListener('click', handleRouteSort);
-
-                // 2. Start listening for data
-                setupRealtimeListener(appId);
-            } catch (error) {
-                console.error("Firebase Initialization/Auth failed:", error);
-                showMessage('Initialization failed. Check your config and services in the Firebase console.', 'error');
-                userIdDisplay.textContent = `User ID: Error`;
-            }
-        }
-        // --- Initialization ---
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeFirebase();
-        });
-    </script>
-</body>
-</html>
+                const
