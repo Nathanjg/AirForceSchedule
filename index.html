@@ -211,21 +211,24 @@
             };
 
             // Update flight A status
-            flight1.status = 'WARNING';
-            if (!flight1.conflictsWith) flight1.conflictsWith = [];
-
-            // Prevent duplicate conflict entries
-            if (!flight1.conflictsWith.some(c => c.id === flight2.id)) {
-                flight1.conflictsWith.push(conflictDetails1);
+            if(flight1.status !== 'CONFLICT'){
+                flight1.status = 'WARNING';
+                if (!flight1.conflictsWith) flight1.conflictsWith = [];
+                
+                // Prevent duplicate conflict entries
+                if (!flight1.conflictsWith.some(c => c.id === flight2.id)) {
+                    flight1.conflictsWith.push(conflictDetails1);
+                }
             }
-
             // Update flight B status
-            flight2.status = 'WARNING';
-            if (!flight2.conflictsWith) flight2.conflictsWith = [];
-
-            // Prevent duplicate conflict entries
-            if (!flight2.conflictsWith.some(c => c.id === flight1.id)) {
-                flight2.conflictsWith.push(conflictDetails2);
+            if(flight2.status !== 'CONFLICT'){
+                flight2.status = 'WARNING';
+                if (!flight2.conflictsWith) flight2.conflictsWith = [];
+    
+                // Prevent duplicate conflict entries
+                if (!flight2.conflictsWith.some(c => c.id === flight1.id)) {
+                    flight2.conflictsWith.push(conflictDetails2);
+                }
             }
         }
         function MarkConflict(flight1, flight2){
