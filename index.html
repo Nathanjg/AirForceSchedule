@@ -95,7 +95,8 @@
     <!-- Firebase Imports and Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // MODIFIED: Added onAuthStateChanged to the import list for robustness
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, deleteDoc, onSnapshot, collection, query, addDoc, setLogLevel, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase Globals & DOM References ---
@@ -535,7 +536,7 @@
             if (isNaN(speedKnots) || speedKnots <= 0) {
                 showMessage("Please enter a valid speed (Knots > 0).", 'error');
                 submitButton.disabled = false;
-                submitButton.textContent = 'Calculate & Schedule Flight';
+                submitButton.textContent = 'Schedule Flight';
                 return;
             }
             
@@ -651,7 +652,7 @@
             }, (error) => {
                 console.error("Firestore snapshot error:", error);
                 if (db) {
-                    showMessage(`Data retrieval failed: ${error.message}. Check your security rules!`, 'error');
+                    showMessage(`Data retrieval failed: ${error.message}. Check your Firestore security rules!`, 'error');
                 }
             });
         }
@@ -662,18 +663,20 @@
          */
         async function initializeFirebase() {
             
-            // --- STEP 1: YOUR LIVE FIREBASE CONFIGURATION (Placeholder values will be replaced by the environment) ---
+            // --- STEP 1: LOAD FIREBASE CONFIGURATION ---
             const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
             appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
             try {
+                // Attempt to initialize the app
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 setLogLevel('debug'); // Enable detailed Firebase logging
 
-                // 1. Authentication
+                // 2. Authentication
                 if (typeof __initial_auth_token !== 'undefined') {
+                    // Ensure the function is called correctly, relying on the robust import above
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else { 
                     await signInAnonymously(auth);
@@ -685,24 +688,23 @@
 
                 // Set initial date input to today
                 selectedDate = new Date();
-                // Format date string for the input
                 const today = new Date();
                 scheduleDateInput.value = today.toISOString().split('T')[0];
                 
                 // Set up event listeners for sorting and date change
                 scheduleDateInput.addEventListener('change', (e) => {
-                    // Update global selected date and process the schedule
                     selectedDate = new Date(e.target.value);
                     processAndRenderFlights();
                 });
                 sortRouteButton.addEventListener('click', handleRouteSort);
                 
-                // 2. Start listening for data
+                // 3. Start listening for data
                 setupRealtimeListener(appId);
 
             } catch (error) {
                 console.error("Firebase Initialization/Auth failed:", error);
-                showMessage('Initialization failed. Check your config and services in the Firebase console.', 'error');
+                // Enhanced message to hint at the configuration issue
+                showMessage(`Initialization failed. The provided Firebase configuration appears invalid, or authentication failed: ${error.message}. Check console for details.`, 'error');
                 userIdDisplay.textContent = `User ID: Error`;
             }
         }
