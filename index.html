@@ -495,20 +495,27 @@
          */
         function processAndRenderFlights() {
             // --- 1. Filter for Selected Date's Flights ---
+            // Use UTC methods to avoid local timezone issues
             const targetDate = new Date(selectedDate);
-            targetDate.setHours(0, 0, 0, 0); 
+            // Set to the start of the day in UTC
+            targetDate.setUTCHours(0, 0, 0, 0); 
             const nextDay = new Date(targetDate);
-            nextDay.setDate(nextDay.getDate() - 1); 
+            // Add one day (24 hours) in UTC
+            nextDay.setUTCDate(nextDay.getUTCDate() + 1); 
 
             let displayFlights = dbFlights.filter(f => {
                 if (!f.startTime || typeof f.startTime.toDate !== 'function') return false;
-                const flightDate = f.startTime.toDate();
-                const flightTimeMs = flightDate.getTime();
+                const flightDate = f.startTime.toDate(); // Assuming this returns a Date object, potentially in UTC
 
-                // Filter to include flights only within the 24-hour window of the selected date
-                return flightTimeMs >= nextDate.getTime() && flightTimeMs < targetDay.getTime();
+                // Ensure flightDate is handled correctly (e.g., if it's already a UTC date from a server)
+                // If f.startTime.toDate() returns a UTC date, the comparison works.
+                // If it returns a local date, you'd need to convert it to UTC first.
+                // Assuming it's a standard Firebase timestamp to Date conversion which handles timezones well:
+                const flightTimeMs = flightDate.getTime(); 
+
+                // Filter to include flights only within the 24-hour window of the selected date (in UTC terms)
+                return flightTimeMs >= targetDate.getTime() && flightTimeMs < nextDay.getTime();
             });
-
             // --- 2. Sort Flights ---
             displayFlights.sort((a, b) => {
                 if (sortOrder.key === 'startTime') {
