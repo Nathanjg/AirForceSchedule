@@ -263,10 +263,10 @@
             const timeout1 = getTimeInMs(out1);
             const timein2 = getTimeInMs(in2);
             const timeout2 = getTimeInMs(out2);
-        
+            const WARNING_SEPARATION_MS = 10 * 60 * 1000;
             // 1. Check for Overlap (CONFLICT)
             // Overlap exists if (start A < end B) AND (end A > start B)
-            const areWindowsOverlapping = (timein1 < timeout2) || (timeout1 > timein2);
+            const areWindowsOverlapping = ((timein1 < timeout2) && (timein1 > timein2)) || ((timeout1 > timein2) && (timeout1 < timeout2));
         
             if (areWindowsOverlapping) {
                 return 'CONFLICT';
