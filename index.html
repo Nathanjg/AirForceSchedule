@@ -198,6 +198,36 @@
          * Marks two flights as conflicting by adding details of the opposing flight
          * to the `conflictsWith` array.
          */
+        function MarkWarning(flight1, flight2){
+            const conflictDetails1 = {
+                id: flight2.id,
+                flightId: flight2.flightId,
+                routeId: flight2.routeId
+            };
+            const conflictDetails2 = {
+                id: flight1.id,
+                flightId: flight1.flightId,
+                routeId: flight1.routeId
+            };
+
+            // Update flight A status
+            flight1.status = 'WARNING';
+            if (!flight1.conflictsWith) flight1.conflictsWith = [];
+
+            // Prevent duplicate conflict entries
+            if (!flight1.conflictsWith.some(c => c.id === flight2.id)) {
+                flight1.conflictsWith.push(conflictDetails1);
+            }
+
+            // Update flight B status
+            flight2.status = 'WARNING';
+            if (!flight2.conflictsWith) flight2.conflictsWith = [];
+
+            // Prevent duplicate conflict entries
+            if (!flight2.conflictsWith.some(c => c.id === flight1.id)) {
+                flight2.conflictsWith.push(conflictDetails2);
+            }
+        }
         function MarkConflict(flight1, flight2){
             const conflictDetails1 = {
                 id: flight2.id,
@@ -228,56 +258,44 @@
                 flight2.conflictsWith.push(conflictDetails2);
             }
         }
-
-        /**
-         * Helper function to determine if two time windows overlap by less than MIN_SEPARATION_MS.
-         * @param {string} in1 - Entry time for window 1.
-         * @param {string} out1 - Exit time for window 1.
-         * @param {string} in2 - Entry time for window 2.
-         * @param {string} out2 - Exit time for window 2.
-         * @returns {boolean} True if a conflict exists.
-         */
         function checkOverlap(in1, out1, in2, out2) {
             const timein1 = getTimeInMs(in1);
             const timeout1 = getTimeInMs(out1);
             const timein2 = getTimeInMs(in2);
             const timeout2 = getTimeInMs(out2);
-
-            // Time Separation Check (5-minute rule)
-            // Conflict exists if the time interval intersection is less than MIN_SEPARATION_MS.
-
-            // Check if intervals overlap
-            const overlapStartsBefore = timein1 < timeout2;
-            const overlapEndsAfter = timeout1 > timein2;
-
-            if (overlapStartsBefore && overlapEndsAfter) {
-                // Calculate the end time of the earlier flight and the start time of the later flight
-                const earliestEnd = Math.min(timeout1, timeout2);
-                const latestStart = Math.max(timein1, timein2);
-
-                // The duration of the overlap interval
-                const overlapDuration = earliestEnd - latestStart;
-
-                // If the overlap duration is large, we check the actual separation.
-                // For simplicity and alignment with the logic in the original prompt, 
-                // we'll stick to the core time window check (A starts during B, or B starts during A) 
-                // combined with the 5-minute minimum separation rule.
-
-                // Simplified overlap check: if one flight's entry time falls within the other's critical window
-                // PLUS ensure a 5-minute buffer is maintained between the end of the first and start of the second.
-
-                // For deconfliction, we check if the critical windows intersect at all (time overlap).
-                const areWindowsOverlapping = (timein1 < timeout2) && (timeout1 > timein2);
-
-                if (areWindowsOverlapping) {
-                    // Check if the separation between the flights is less than 5 minutes.
-                    // This is complex for time intervals. The simpler version used in the user's previous code was:
-                    // (timein1 < timein2 && timein2 < timeout1) || (timein1 < timeout2 && timeout2 < timeout1)
-                    // Let's stick to the principle: if the critical windows overlap in time, it's a CONFLICT.
-                    return true;
-                }
+        
+            // 1. Check for Overlap (CONFLICT)
+            // Overlap exists if (start A < end B) AND (end A > start B)
+            const areWindowsOverlapping = (timein1 < timeout2) || (timeout1 > timein2);
+        
+            if (areWindowsOverlapping) {
+                return 'CONFLICT';
             }
-            return false;
+        
+            // 2. Check for Proximity (WARNING)
+            // Since they don't overlap, we calculate the separation time.
+        
+            let separation = Infinity;
+            
+            if (timeout1 <= timein2) {
+                // Flight 1 ends before Flight 2 starts: separation is TimeIn2 - TimeOut1
+                separation = timein2 - timeout1;
+            } else if (timeout2 <= timein1) {
+                // Flight 2 ends before Flight 1 starts: separation is TimeIn1 - TimeOut2
+                separation = timein1 - timeout2;
+            } else {
+                // Should not happen if overlap check passed, but acts as a safeguard.
+                return 'NONE';
+            }
+        
+            // Check if separation is within the 10-minute warning threshold
+            // WARNING_SEPARATION_MS is defined as 10 * 60 * 1000 in the shared file.
+            if (separation <= WARNING_SEPARATION_MS) {
+                return 'WARNING';
+            }
+        
+            // 3. No interaction (NONE)
+            return 'NONE';
         }
 
         /**
@@ -336,46 +354,48 @@
 
                     // --- 2. Different-Route Intersection Conflict Check (9 Rules) ---
                     if (flightA.routeId !== flightB.routeId) {
-
-                        // Function to normalize the check so flightA is always the 'A' route, and flightB is 'B' route
-                        const checkIntersection = (f1, f2) => {
-                            const routePair = [f1.routeId, f2.routeId].sort().join('-');
-                            const times1 = getCriticalTimes(f1);
-                            const times2 = getCriticalTimes(f2);
-
-                            // Check if critical times were successfully determined
-                            if (times1.length !== 2 || times2.length !== 2) return false;
-
-                            let shouldCheck = false;
-
-                            // Check if the route pair is one of the 9 conflict pairs
-                            if (
-                                routePair === 'SR130-VR140' || // Rule 1
-                                routePair === 'SR290-VR142' || // Rule 2
-                                routePair === 'SR286-VR142' || // Rule 3
-                                routePair === 'SR130-VR143' || // Rule 4
-                                routePair === 'IR123-VR143' || // Rule 5
-                                routePair === 'IR123-SR130' || // Rule 6
-                                routePair === 'SR286-SR290' || // Rule 7
-                                routePair === 'SR286-SR292' || // Rule 8
-                                routePair === 'SR290-SR292'    // Rule 9
-                            ) {
-                                shouldCheck = true;
-                            }
-
-                            if (shouldCheck) {
-                                return checkOverlap(times1[0], times1[1], times2[0], times2[1]);
-                            }
-                            return false;
-                        };
-
-                        if (checkIntersection(flightA, flightB)) {
+                        const result = checkIntersection(flightA, flightB);
+                        if (result = "CONFLICT") {
                             MarkConflict(flightA, flightB);
+                        }
+                        if(result = "WARNING"){
+                            MarkWarning(flightA, flightB);
                         }
                     }
                 }
             }
             return liveSchedule;
+        }
+                                // Function to normalize the check so flightA is always the 'A' route, and flightB is 'B' route
+        function checkIntersection(f1, f2) {
+            const routePair = [f1.routeId, f2.routeId].sort().join('-');
+            const times1 = getCriticalTimes(f1);
+            const times2 = getCriticalTimes(f2);
+
+            // Check if critical times were successfully determined
+            if (times1.length !== 2 || times2.length !== 2) return false;
+
+            let shouldCheck = false;
+
+            // Check if the route pair is one of the 9 conflict pairs
+            if (
+                routePair === 'SR130-VR140' || // Rule 1
+                routePair === 'SR290-VR142' || // Rule 2
+                routePair === 'SR286-VR142' || // Rule 3
+                routePair === 'SR130-VR143' || // Rule 4
+                routePair === 'IR123-VR143' || // Rule 5
+                routePair === 'IR123-SR130' || // Rule 6
+                routePair === 'SR286-SR290' || // Rule 7
+                routePair === 'SR286-SR292' || // Rule 8
+                routePair === 'SR290-SR292'    // Rule 9
+            ) {
+                shouldCheck = true;
+            }
+
+            if (shouldCheck) {
+                return checkOverlap(times1[0], times1[1], times2[0], times2[1]);
+            }
+            return false;
         }
 
         // ######################################################################
@@ -448,29 +468,40 @@
             scheduleBody.innerHTML = ''; // Clear existing rows
 
             if (flights.length === 0) {
-                const dateDisplay = selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                scheduleBody.innerHTML = `
-                    <tr>
-                        <td colspan="5" class="px-3 py-4 text-center text-gray-500 italic">
-                            No flights scheduled for ${dateDisplay}. Add one above!
-                        </td>
-                    </tr>
-                `;
+                // ... (omitted)
                 return;
             }
             flights.forEach(flight => {
+                // --- NEW / REVISED LOGIC START ---
                 const isConflict = flight.status === 'CONFLICT';
-                const rowClass = isConflict ? 'bg-red-100 hover:bg-red-200' : 'bg-white hover:bg-gray-50';
-                const statusBadgeClass = isConflict 
-                    ? 'bg-red-500 text-white' 
-                    : 'bg-green-100 text-green-800';
+                const isWarning = flight.status === 'WARNING' && !isConflict; // Ensure CONFLICT takes priority
 
+                let rowClass = 'bg-white hover:bg-gray-50';
+                let statusBadgeClass = 'bg-green-100 text-green-800';
                 let conflictText = '—';
-                if (isConflict && flight.conflictsWith.length > 0) {
-                    // Display up to 3 conflicting IDs
-                    const ids = flight.conflictsWith.map(c => `${c.flightId} (${c.routeId})`);
+                let conflictTextColor = 'text-gray-500';
+                let currentOpposingFlights = [];
+
+                if (isConflict) {
+                    rowClass = 'bg-red-100 hover:bg-red-200';
+                    statusBadgeClass = 'bg-red-500 text-white';
+                    currentOpposingFlights = flight.conflictsWith || [];
+                    conflictTextColor = 'text-red-700';
+
+                } else if (isWarning) {
+                    // Styles for WARNING (Yellow)
+                    rowClass = 'bg-yellow-50 hover:bg-yellow-100';
+                    statusBadgeClass = 'bg-yellow-500 text-black'; // Using black text for contrast on yellow
+                    currentOpposingFlights = flight.warningsWith || [];
+                    conflictTextColor = 'text-yellow-700';
+                }
+                
+                // Text generation for both Conflict and Warning
+                if ((isConflict || isWarning) && currentOpposingFlights.length > 0) {
+                    const ids = currentOpposingFlights.map(c => `${c.flightId} (${c.routeId})`);
                     conflictText = `vs ${ids.slice(0, 3).join(', ')}${ids.length > 3 ? '...' : ''}`;
                 }
+                // --- NEW / REVISED LOGIC END ---
 
                 const routeInfo = `${flight.routeId} at ${flight.speedKnots}kts`;
 
@@ -489,7 +520,7 @@
                         <span class="px-2 block text-xs leading-5 font-semibold rounded-full ${statusBadgeClass}">
                             ${flight.status}
                         </span>
-                        ${isConflict ? `<p class="text-xs text-red-700 mt-1 font-medium">${conflictText}</p>` : ''}
+                        ${(isConflict || isWarning) ? `<p class="text-xs ${conflictTextColor} mt-1 font-medium">${conflictText}</p>` : ''}
                     </td>
                     <td class="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
                         <button onclick="deleteFlight('${flight.id}')" class="text-red-600 hover:text-red-900 text-xs font-semibold p-1 rounded-md hover:bg-red-100 transition">Delete</button>
