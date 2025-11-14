@@ -301,26 +301,92 @@
             return 'NONE';
         }
 
-        /**
-         * Normalizes the critical time window for a given flight based on its route.
-         * @param {Object} flight - The flight object.
-         * @returns {Array<string>} An array [entryTime, exitTime].
-         */
-        function getCriticalTimes(flight) {
-            const times = flight.intersectionTimes;
-            switch (flight.routeId) {
-                // Rule 1, 2, 4, 6, 7, 9 (Specific Segments)
-                case "VR140": return [times[0], times[1]]; // 182 NM to 240 NM
-                case "VR142": return [times[0], times[1]]; // 140 NM to 178 NM
-                case "SR130": return [times[0], times[2]]; // 50 NM to 109 NM
-                case "SR290": return [times[0], times[2]]; // 43 NM to 120 NM
-                case "SR292": return [times[0], times[1]]; // 100 NM to 114 NM
 
-                // Rule 3, 5 (Full/Long Segments)
-                case "VR143": return [times[0], times[2]]; // 0 NM to 322 NM (full route)
-                case "IR123": return [times[0], times[2]]; // 0 NM to 367 NM (full route)
-                case "SR286": return [times[1], times[3]]; // 66 NM to 111 NM
-                default: return [];
+        function getCriticalTimes(flight, routepair) {
+            const times = flight.intersectionTimes;
+            switch(routepair){
+                case 'SR130-VR140':
+                    if(flight.routeId === "VR140"){
+                        return [times[0], times[1]]
+                    }
+                    else
+                    {
+                        return [times[0], times[1]]
+                    }
+                    //Rule 1
+                    //Code written by Nathaniel Guy 417-818-3369 for errors or issues
+                case 'SR290-VR142':
+                    if(flight.routeId === "SR290"){
+                        return [times[0], times[1]]
+                    }
+                    else
+                    {
+                        return [times[0], times[1]]
+                    }
+                    //Rule 2
+                case 'SR286-VR142':
+                if(flight.routeId === "SR286"){
+                        return [times[0], times[2]]
+                    }
+                    else
+                    {
+                        return [times[0], times[1]]
+                    }
+                    //Rule 3
+                case 'SR130-VR143':
+                    if(flight.routeId === "VR143"){
+                        return [times[0], times[1]]
+                    }
+                    else
+                    {
+                        return [times[1], times[2]]
+                    }
+                case 'IR123-VR143':
+                    if(flight.routeId === "VR143"){
+                        return [times[0], times[2]]
+                    }
+                    else
+                    {
+                        return [times[0], times[2]]
+                    }
+                    //Rule 5
+                case 'IR123-SR130':
+                    if(flight.routeId === "IR123"){
+                        return [times[0], times[1]]
+                    }
+                    else
+                    {
+                        return [times[1], times[2]]
+                    }
+                    //Rule 6
+                case 'SR286-SR290':
+                    if(flight.routeId === "SR286"){
+                        return [times[1], times[3]]
+                    }
+                    else
+                    {
+                        return [times[1], times[2]]
+                    }
+                    // Rule 7
+                case 'SR286-SR292':
+                    if(flight.routeId === "SR286"){
+                        return [times[2], times[3]]
+                    }
+                    else
+                    {
+                        return [times[0], times[1]]
+                    }
+                    // Rule 8
+                case 'SR290-SR292':
+                    if(flight.routeId === "SR290"){
+                        return [times[1], times[2]]
+                    }
+                    else
+                    {
+                        return [times[0], times[1]]
+                    }
+                    // Rule 9
+                    default: return [];
             }
         }
 
@@ -372,8 +438,8 @@
                                 // Function to normalize the check so flightA is always the 'A' route, and flightB is 'B' route
         function checkIntersection(f1, f2) {
             const routePair = [f1.routeId, f2.routeId].sort().join('-');
-            const times1 = getCriticalTimes(f1);
-            const times2 = getCriticalTimes(f2);
+            const times1 = getCriticalTimes(f1, routePair);
+            const times2 = getCriticalTimes(f2, routePair);
 
             // Check if critical times were successfully determined
             if (times1.length !== 2 || times2.length !== 2) return false;
