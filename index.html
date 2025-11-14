@@ -497,7 +497,7 @@
             // --- 1. Filter for Selected Date's Flights ---
             const targetDate = new Date(selectedDate);
             // Set the target date to midnight UTC of the selected day
-            targetDate.setUTCHours(0, 0, 0, 0); 
+            targetDate.setUTCHours(6, 0, 0, 0); 
             
             // Calculate the next day's midnight UTC consistently
             const nextDay = new Date(targetDate);
