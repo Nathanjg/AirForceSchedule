@@ -1,0 +1,263 @@
+/* --- Air Force–Style CSS, using Tailwind-like class names --- */
+
+/* Root / color variables */
+:root {
+  --af-academy-blue: #003594;      /* Academy Blue */ :contentReference[oaicite:1]{index=1}  
+  --af-class-royal: #002554;       /* Class Royal / Dark Blue */ :contentReference[oaicite:2]{index=2}  
+  --af-gray: #B2B4B2;               /* Academy Gray */ :contentReference[oaicite:3]{index=3}  
+  --af-white: #FFFFFF;  
+  --af-red: #A6192E;               /* Class Red */ :contentReference[oaicite:4]{index=4}  
+  --af-yellow: #FFC72C;            /* Class Yellow */ :contentReference[oaicite:5]{index=5}  
+
+  --text-default: #333333;
+  --text-muted: #666666;
+}
+
+/* Base / body */
+.body {
+  margin: 0;
+  padding: 0;
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--text-default);
+  background-color: var(--af-white);
+  line-height: 1.6;
+}
+
+/* Headings */
+.text-3xl {
+  font-size: 2.25rem;
+}
+.text-2xl {
+  font-size: 1.875rem;
+}
+.text-xl {
+  font-size: 1.25rem;
+}
+.font-bold {
+  font-weight: 700;
+}
+.font-semibold {
+  font-weight: 600;
+}
+.font-extrabold {
+  font-weight: 800;
+}
+
+/* Text colors */
+.text-gray-900 {
+  color: var(--text-default);
+}
+.text-gray-500 {
+  color: var(--text-muted);
+}
+.text-af-blue {
+  color: var(--af-academy-blue);
+}
+.text-af-dark {
+  color: var(--af-class-royal);
+}
+
+/* Background colors */
+.bg-white {
+  background-color: var(--af-white);
+}
+.bg-af-blue {
+  background-color: var(--af-academy-blue);
+}
+.bg-af-dark {
+  background-color: var(--af-class-royal);
+}
+.bg-blue-50 {
+  background-color: rgba(0, 53, 148, 0.05); /* very light AF blue */
+}
+.bg-gray-100 {
+  background-color: #f5f5f5;
+}
+.bg-af-gray {
+  background-color: var(--af-gray);
+}
+
+/* Borders */
+.border {
+  border: 1px solid var(--af-gray);
+}
+.border-af-blue {
+  border-color: var(--af-academy-blue);
+}
+.border-af-dark {
+  border-color: var(--af-class-royal);
+}
+
+/* Padding / margin (common sizes) */
+.p-3 { padding: 0.75rem; }
+.p-4 { padding: 1rem; }
+.p-6 { padding: 1.5rem; }
+.p-8 { padding: 2rem; }
+.m-4 { margin: 1rem; }
+.mb-4 { margin-bottom: 1rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+
+/* Container */
+.max-w-6xl {
+  max-width: 72rem; /* 1152px */
+}
+.max-w-4xl {
+  max-width: 56rem; /* 896px */
+}
+
+/* Shadows */
+.shadow-xl {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+}
+.shadow-md {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Border radius */
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+.rounded-xl {
+  border-radius: 0.75rem;
+}
+.rounded-full {
+  border-radius: 9999px;
+}
+
+/* Buttons */
+.btn, .w-full.btn {
+  display: inline-block;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--af-white);
+  background-color: var(--af-academy-blue);
+  border: 1px solid var(--af-academy-blue);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+  text-align: center;
+  text-decoration: none;
+}
+.btn:hover {
+  background-color: var(--af-class-royal);
+  border-color: var(--af-class-royal);
+}
+.btn-outline {
+  background-color: transparent;
+  color: var(--af-academy-blue);
+  border-color: var(--af-academy-blue);
+}
+.btn-outline:hover {
+  background-color: var(--af-academy-blue);
+  color: var(--af-white);
+}
+
+/* Form controls */
+.input, input[type="text"], input[type="number"], input[type="datetime-local"], input[type="date"], select {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid var(--af-gray);
+  border-radius: 0.25rem;
+  box-sizing: border-box;
+}
+.input:focus, input:focus, select:focus {
+  outline: none;
+  border-color: var(--af-academy-blue);
+  box-shadow: 0 0 0 3px rgba(0, 53, 148, 0.2);
+}
+
+/* Alerts / messages */
+.messageBox, .alert {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 0.25rem;
+}
+.alert-success {
+  background-color: #E6F4EA;
+  color: #1B4D2A;
+  border: 1px solid #B7E0C8;
+}
+.alert-error {
+  background-color: #FDECEA;
+  color: #8B1C1C;
+  border: 1px solid #F5C2C2;
+}
+
+/* Cards / containers */
+.card {
+  background-color: var(--af-white);
+  border: 1px solid var(--af-gray);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Tables */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+.table th, .table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--af-gray);
+}
+.table th {
+  background-color: var(--af-class-royal);
+  color: var(--af-white);
+  font-weight: 600;
+}
+.table tbody tr:hover {
+  background-color: #f9f9f9;
+}
+
+/* Text alignment utilities */
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+/* Badge (status) */
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  color: var(--af-white);
+}
+.badge-ok {
+  background-color: #4CAF50;
+}
+.badge-warning {
+  background-color: #FBC02D;
+  color: #333;
+}
+.badge-conflict {
+  background-color: #D32F2F;
+}
+
+/* Utility for scrolling in table */
+.scrollable-table {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* Section-specific */
+.schedule-header {
+  border-bottom: 2px solid var(--af-class-royal);
+  padding-bottom: 0.5rem;
+}
+.form-section {
+  background-color: rgba(0, 53, 148, 0.05);
+  border: 1px solid var(--af-gray);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+.date-sort-section {
+  background-color: #f7f9fd;
+  border: 1px solid var(--af-gray);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
